@@ -21,6 +21,8 @@ var tool_panel = null
 # The offset by which the invisible grid we snap to is deplaced from the vanilla grid.
 var snap_offset = Vector2(64, 64)
 
+var vx = 0
+var vy = 0
 
 
 # Vanilla start function called by Dungeondraft when the mod is first loaded
@@ -59,13 +61,37 @@ func update(delta):
     # TODO: replace with properly calculated custom grid and offset
     var snap = Global.WorldUI.get_CursorHalfTilePosition()
     snap += snap_offset
-
-
+    
+    # Snaps the default snap position to our Snappy Grid.
+    # Unfortunately, due to the update order many tools have already used the old position.
+    # Hence we must update these tools to the new Snappy Grid position manually.
     Global.WorldUI.set_CursorHalfTilePosition(snap)
     Global.WorldUI.set_CursorTilePosition(snap)
 
-    
+    # TODO: update Poly & Path editing visuals to Snappy Grid.
+
+    # TODO: update Select tool to conform to Snappy Grid.
+
+    # TODO: update Portal tool to conform to Snappy Grid.
+
+    # Sets the vertex position when editing path nodes.
+    # TODO: Needs to be changed to only apply when actually dragging them and not while only selecting the paths.
+    if Global.WorldUI.Vertices != null and not Global.WorldUI.Vertices.empty():
+        Global.WorldUI.SetVertex(snap)
+
+
+    var s_tool = Global.Editor.Tools["SelectTool"]
+    if not (s_tool.boxBegin.x == null and s_tool.boxBegin.y == null and s_tool.boxEnd.x == null and s_tool.boxEnd.y == null):
+        print(s_tool.boxBegin, " : ", s_tool.boxEnd)
+
+
+    # Snaps path arcs to the Snappy Grid.
+    if Global.WorldUI.EditArcPoint:
+        Global.WorldUI.UpdateLastArcPoint()
+
+    # Snaps the Object and Scatter tools to the Snappy Grid.
     _update_object_placement(snap)
+    # Snaps the Building, Pattern, Water, etc. polygons to the Snappy Grid.
     _update_selection_box(snap)
 
 
@@ -125,8 +151,8 @@ func _on_debug_button():
 #    print_parents(tool_panel)
 #    load_user_settings()
 #    print_levels()
-#    print_methods(Global.WorldUI)
-    print_properties(Global.WorldUI)
+    print_methods(Global.WorldUI.transformCornerStyleBox)
+#    print_properties(Global.WorldUI)
 #    print_signals(Global.WorldUI)
 #    Global.World.print_tree_pretty()
     Global.WorldUI.SetSelectionBox(Rect2(Vector2(1024, 1024), Vector2(1024, 1024)))
