@@ -20,7 +20,9 @@ const MOD_DATA_PATH = "user://snappy_mod_data.txt"
 var tool_panel = null
 
 # The offset by which the invisible grid we snap to is deplaced from the vanilla grid.
-var snap_offset = Vector2(64, 64)
+var snap_offset = Vector2(0, 0)
+# The space inbetween the invisible lines we snap to.
+var snap_interval = Vector2(64, 64)
 
 
 # Vanilla start function called by Dungeondraft when the mod is first loaded
@@ -57,8 +59,7 @@ func start():
 # Vanilla update called by Godot every frame.
 func update(delta):
     # TODO: replace with properly calculated custom grid and offset
-    var snap = Global.WorldUI.get_CursorHalfTilePosition()
-    snap += snap_offset
+    var snap = get_snapped_position(Global.WorldUI.get_MousePosition())
     
     # Snaps the default snap position to our Snappy Grid.
     # Unfortunately, due to the update order many tools have already used the old position.
@@ -99,6 +100,28 @@ func update(delta):
     _update_selection_box(snap)
 
 
+
+func get_snapped_position(target_position):
+    var snap_x = target_position.x
+    var snap_y = target_position.y
+
+    var offset_snap = snap_x - snap_offset.x
+    var intervals = floor(offset_snap / snap_interval.x)
+    var remainder = fmod(offset_snap, snap_interval.x)
+    snap_x = intervals * snap_interval.x
+
+    if remainder > snap_interval.x / 2:
+        snap_x += snap_interval.x
+
+    offset_snap = snap_y - snap_offset.y
+    intervals = floor(offset_snap / snap_interval.y)
+    remainder = fmod(offset_snap, snap_interval.y)
+    snap_y = intervals * snap_interval.y
+
+    if remainder > snap_interval.y / 2:
+        snap_y += snap_interval.y
+    
+    return Vector2(snap_x + snap_offset.x, snap_y + snap_offset.y)
 
 
 func _update_poly_selection(apply_to_tool):
@@ -167,7 +190,7 @@ func _on_debug_button():
 #    print_parents(tool_panel)
 #    load_user_settings()
 #    print_levels()
-    print_methods(Global.Editor.Tools["FloorShapeTool"])
+#    print_methods(Global.WorldUI)
 #    print_properties(Global.Editor.Tools["FloorShapeTool"])
 #    print_signals(Global.Editor.Tools["PathTool"])
 #    Global.World.print_tree_pretty()
