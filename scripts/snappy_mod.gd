@@ -15,14 +15,12 @@ const REWIND_ICON_PATH = "icons/rewind_icon.png"
 # The path for storing the mod's settings.
 const MOD_DATA_PATH = "user://snappy_mod_data.txt"
 
+
 # The DD native sidebar where the tools are registered.
 var tool_panel = null
 
 # The offset by which the invisible grid we snap to is deplaced from the vanilla grid.
 var snap_offset = Vector2(64, 64)
-
-var vx = 0
-var vy = 0
 
 
 # Vanilla start function called by Dungeondraft when the mod is first loaded
@@ -69,6 +67,11 @@ func update(delta):
     Global.WorldUI.set_CursorTilePosition(snap)
 
     # TODO: update Poly & Path editing visuals to Snappy Grid.
+    _update_poly_selection("PathTool")
+    _update_poly_selection("FloorShapeTool")
+    _update_poly_selection("PatternShapeTool")
+    _update_poly_selection("WallTool")
+
 
     # TODO: update Select tool to conform to Snappy Grid.
 
@@ -82,7 +85,8 @@ func update(delta):
 
     var s_tool = Global.Editor.Tools["SelectTool"]
     if not (s_tool.boxBegin.x == null and s_tool.boxBegin.y == null and s_tool.boxEnd.x == null and s_tool.boxEnd.y == null):
-        print(s_tool.boxBegin, " : ", s_tool.boxEnd)
+        #print(s_tool.boxBegin, " : ", s_tool.boxEnd)
+        pass
 
 
     # Snaps path arcs to the Snappy Grid.
@@ -93,6 +97,18 @@ func update(delta):
     _update_object_placement(snap)
     # Snaps the Building, Pattern, Water, etc. polygons to the Snappy Grid.
     _update_selection_box(snap)
+
+
+
+
+func _update_poly_selection(apply_to_tool):
+    var is_edit_mode = Global.Editor.Tools[apply_to_tool].get_EditPoints().pressed
+    var is_tool_active = Global.Editor.ActiveToolName == apply_to_tool
+    var is_looking_at_vertex = Global.WorldUI.Vertex != null
+    var is_dragging_mouse = Input.is_mouse_button_pressed(BUTTON_LEFT)
+    if is_edit_mode and is_looking_at_vertex and is_dragging_mouse and is_tool_active:
+        # False is important here. Otherwise it saves the changes. Found out the hard way. TYVM to MBMM!
+        Global.Editor.Tools[apply_to_tool].UpdateSelectionPosition(false)
 
 
 func _update_object_placement(snap):
@@ -151,11 +167,10 @@ func _on_debug_button():
 #    print_parents(tool_panel)
 #    load_user_settings()
 #    print_levels()
-    print_methods(Global.WorldUI.transformCornerStyleBox)
-#    print_properties(Global.WorldUI)
-#    print_signals(Global.WorldUI)
+    print_methods(Global.Editor.Tools["FloorShapeTool"])
+#    print_properties(Global.Editor.Tools["FloorShapeTool"])
+#    print_signals(Global.Editor.Tools["PathTool"])
 #    Global.World.print_tree_pretty()
-    Global.WorldUI.SetSelectionBox(Rect2(Vector2(1024, 1024), Vector2(1024, 1024)))
 
 
 func print_parents(node):
