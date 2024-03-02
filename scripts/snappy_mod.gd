@@ -75,8 +75,12 @@ func update(delta):
 
 
     # TODO: update Select tool to conform to Snappy Grid.
+    _update_select_tool()
 
-    # TODO: update Portal tool to conform to Snappy Grid.
+    # Snaps portals, however only while they are freestanding.
+    # Snapping portals to walls doesn't work as of now.
+    _snap_portals(snap)
+    
 
     # Sets the vertex position when editing path nodes.
     # TODO: Needs to be changed to only apply when actually dragging them and not while only selecting the paths.
@@ -101,10 +105,27 @@ func update(delta):
 
 
 
-func get_snapped_position(target_position):
-    var snap_x = target_position.x
-    var snap_y = target_position.y
+func _update_select_tool():
+    var select_tool = Global.Editor.Tools["SelectTool"]
+    if select_tool.transformMode != 1:
+        return
+    
+    var move_x = select_tool.moveDelta.x
+    var move_y = select_tool.moveDelta.y
 
+    move_x = floor(move_x / snap_interval.x) * snap_interval.x
+    move_y = floor(move_y / snap_interval.y) * snap_interval.y
+    var move_transform = select_tool.preDragTransform
+    move_transform.origin += Vector2(move_x, move_y)
+
+    select_tool.ApplyTransforms(move_transform)
+    select_tool.transformBox.position = move_transform.origin
+
+
+
+func get_snapped_position(target_position):
+    # Calculating snap for X axis
+    var snap_x = target_position.x
     var offset_snap = snap_x - snap_offset.x
     var intervals = floor(offset_snap / snap_interval.x)
     var remainder = fmod(offset_snap, snap_interval.x)
@@ -113,6 +134,8 @@ func get_snapped_position(target_position):
     if remainder > snap_interval.x / 2:
         snap_x += snap_interval.x
 
+    # Calculating snap for Y axis
+    var snap_y = target_position.y
     offset_snap = snap_y - snap_offset.y
     intervals = floor(offset_snap / snap_interval.y)
     remainder = fmod(offset_snap, snap_interval.y)
@@ -145,6 +168,27 @@ func _update_selection_box(snap):
     if not (box.position.x == 0 and box.position.y == 0 and box.position.x == 0 and box.position.y == 0):
         box.end = snap
         Global.WorldUI.SetSelectionBox(box)
+
+
+# NOTES ON SNAPPING PORTALS TO WALLS
+# This line works as it should. We can find an apppropriate location for our portal near the snap location.
+# ==> Global.Editor.Tools["PortalTool"].FindBestLocation(snap)
+# This one is what breaks the implementation. This variable cannont cross the C# -> GDScript boundary.
+# ==> var portal_location = Global.Editor.Tools["PortalTool"].get_FoundSpot()
+# We could then set the location as simple as this.
+# ==> Global.WorldUI.Texture.Transform = portal_location
+# However, since we do not know exactly where the portal would go, our best bet will be a custom implementation.
+# That might not be 100% accurate though.
+# And more importantly, it's way too much work.
+# Hence portals won't snap to walls
+# If there's a tool that ain't an issue with, I think this is it.
+# However they will still snap while freestanding.
+func _snap_portals(snap):
+    #Global.Editor.Tools["PortalTool"].FindBestLocation(snap)
+    #var portal_location = Global.Editor.Tools["PortalTool"].get_FoundSpot()
+    #Global.WorldUI.Texture.Transform = portal_location
+    if Global.Editor.Tools["PortalTool"].Freestanding:
+        Global.WorldUI.Texture.Transform.origin = snap
 
 
 # Saves the user settings as JSON in the MOD_DATA_PATH
@@ -190,8 +234,8 @@ func _on_debug_button():
 #    print_parents(tool_panel)
 #    load_user_settings()
 #    print_levels()
-#    print_methods(Global.WorldUI)
-#    print_properties(Global.Editor.Tools["FloorShapeTool"])
+#    print_methods(Global.Editor.Tools["SelectTool"])
+    print_properties(Global.Editor.Tools["SelectTool"])
 #    print_signals(Global.Editor.Tools["PathTool"])
 #    Global.World.print_tree_pretty()
 
