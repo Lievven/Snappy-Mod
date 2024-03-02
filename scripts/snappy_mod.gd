@@ -25,6 +25,8 @@ var snap_offset = Vector2(0, 0)
 var snap_interval = Vector2(64, 64)
 
 
+
+
 # Vanilla start function called by Dungeondraft when the mod is first loaded
 func start():
 
@@ -50,7 +52,6 @@ func start():
     
     tool_panel.EndSection()
 
-
     print("[Snappy Mod] UI Layout: successful")
     
 
@@ -58,7 +59,11 @@ func start():
 
 # Vanilla update called by Godot every frame.
 func update(delta):
-    # TODO: replace with properly calculated custom grid and offset
+    # We only want to snap when the user actually has snapping enabled.
+    if not Global.Editor.IsSnapping:
+        return
+
+    # Our current cursor position, adjusted to snap to our invisible Snappy Grid.
     var snap = get_snapped_position(Global.WorldUI.get_MousePosition())
     
     # Snaps the default snap position to our Snappy Grid.
@@ -67,120 +72,164 @@ func update(delta):
     Global.WorldUI.set_CursorHalfTilePosition(snap)
     Global.WorldUI.set_CursorTilePosition(snap)
 
-    # TODO: update Poly & Path editing visuals to Snappy Grid.
+    # Update the polygon editing selection for a variety of tools to snap the vertex we are editing to the previously set position.
     _update_poly_selection("PathTool")
     _update_poly_selection("FloorShapeTool")
     _update_poly_selection("PatternShapeTool")
     _update_poly_selection("WallTool")
 
-
+    # Updates the normal movement of the Select Tool to move in intervals corresponding our Snap Interval
     _update_select_tool()
+    # Updates the instant drag movement of the Select Tool to snap to our invisible Snappy Grid.
     _update_instant_drag()
-
 
     # Snaps portals, however only while they are freestanding.
     # Snapping portals to walls doesn't work as of now.
-    _snap_portals(snap)
+    _update_portals(snap)
     
-
-    # Sets the vertex position when editing path nodes.
-    # TODO: Needs to be changed to only apply when actually dragging them and not while only selecting the paths.
-    if Global.WorldUI.Vertices != null and not Global.WorldUI.Vertices.empty():
-        Global.WorldUI.SetVertex(snap)
-
-
-    var s_tool = Global.Editor.Tools["SelectTool"]
-    if not (s_tool.boxBegin.x == null and s_tool.boxBegin.y == null and s_tool.boxEnd.x == null and s_tool.boxEnd.y == null):
-        #print(s_tool.boxBegin, " : ", s_tool.boxEnd)
-        pass
-
-
     # Snaps path arcs to the Snappy Grid.
+    # Aka. snaps the point that defines the curvature of the arc we are currently creating.
     if Global.WorldUI.EditArcPoint:
         Global.WorldUI.UpdateLastArcPoint()
 
     # Snaps the Object and Scatter tools to the Snappy Grid.
     _update_object_placement(snap)
-    # Snaps the Building, Pattern, Water, etc. polygons to the Snappy Grid.
+    # Snaps the Building, Pattern, Water, Path, etc. polygons to the Snappy Grid.
     _update_selection_box(snap)
 
 
 
-
-func _update_instant_drag():
-    var select_tool = Global.Editor.Tools["SelectTool"]
-    if select_tool.justManualMoved:
-        var i = 0
-        for movable in select_tool.movableThings:
-            var previous_position = select_tool.preMovePositions[i]
-            i += 1
-            var new_position = previous_position + select_tool.moveDelta
-            movable.position = get_snapped_position(new_position)
-
-
-func _update_select_tool():
-    var select_tool = Global.Editor.Tools["SelectTool"]
-    if select_tool.transformMode != 1:
-        return
-    
-    var move_x = select_tool.moveDelta.x
-    var move_y = select_tool.moveDelta.y
-
-    move_x = floor(move_x / snap_interval.x) * snap_interval.x
-    move_y = floor(move_y / snap_interval.y) * snap_interval.y
-    var move_transform = select_tool.preDragTransform
-    move_transform.origin += Vector2(move_x, move_y)
-
-    select_tool.ApplyTransforms(move_transform)
-    select_tool.transformBox.position = move_transform.origin
-
-
-
+# Calculate the closest position snapped to our invisible Snappy Grid from the given Vector2.
 func get_snapped_position(target_position):
     # Calculating snap for X axis
-    var snap_x = target_position.x
-    var offset_snap = snap_x - snap_offset.x
-    var intervals = floor(offset_snap / snap_interval.x)
-    var remainder = fmod(offset_snap, snap_interval.x)
-    snap_x = intervals * snap_interval.x
+    # First we clean our snap offset from the position since we only want to work with the snap interval.
+    var offset_snap = target_position.x - snap_offset.x
+    # Then we snap to the smaller interval.
+    var snap_x = floor(offset_snap / snap_interval.x) * snap_interval.x
 
-    if remainder > snap_interval.x / 2:
+    # If we are closer to the larger interval, we add 1 interval to our new position.
+    if fmod(offset_snap, snap_interval.x) > snap_interval.x / 2:
         snap_x += snap_interval.x
 
     # Calculating snap for Y axis
-    var snap_y = target_position.y
-    offset_snap = snap_y - snap_offset.y
-    intervals = floor(offset_snap / snap_interval.y)
-    remainder = fmod(offset_snap, snap_interval.y)
-    snap_y = intervals * snap_interval.y
+    # First we clean our snap offset from the position since we only want to work with the snap interval.
+    offset_snap = target_position.y - snap_offset.y
+    # Then we snap to the smaller interval.
+    var snap_y = floor(offset_snap / snap_interval.y) * snap_interval.y
 
-    if remainder > snap_interval.y / 2:
+    # If we are closer to the larger interval, we add 1 interval to our new position.
+    if fmod(offset_snap, snap_interval.y) > snap_interval.y / 2:
         snap_y += snap_interval.y
     
+    # Re-applying the offset.
     return Vector2(snap_x + snap_offset.x, snap_y + snap_offset.y)
 
 
+
+# Snaps the instant drag of the Select Tool to our invisible Snappy Grid.
+# It's important to note that we don't snap to our cursors position but rather relative to the cursor movement.
+# As the cursor might be off-centre from the object(s) we are trying to move.
+func _update_instant_drag():
+    var select_tool = Global.Editor.Tools["SelectTool"]
+    # Return if we aren't using instant drag
+    if not select_tool.justManualMoved:
+        return
+    
+    # Iterate over all selected objects that are instant dragable, as well as their positions before the instant drag.
+    # This should only be 1 object, but since since for some reason it's an array I'm looping, just in case.
+    var i = 0
+    for movable in select_tool.movableThings:
+        var previous_position = select_tool.preMovePositions[i]
+        i += 1
+        # The previous position is always where we picked the item up and the delta the mouse movement since we picked it up.
+        var new_position = previous_position + select_tool.moveDelta
+        movable.position = get_snapped_position(new_position)
+
+
+# Snaps the normal Select Tool movement based on our Snappy Interval.
+# Unlike instant drag, the vanilla movement does not seem to snap to a specific position, but rather relative to the movement.
+# So we're doing the same thing, therefore completely ignoring offset.
+# We simply move the selection in steps equal to our interval, based on the mouse movement.
+func _update_select_tool():
+    var select_tool = Global.Editor.Tools["SelectTool"]
+    # Return if we aren't actually currently moving anything with the Select Tool.
+    if select_tool.transformMode != 1:
+        return
+    
+    # The distance of our mouse movement from our initial position.
+    # We want to snap this to the closest interval.
+    var move_x = select_tool.moveDelta.x
+    var move_y = select_tool.moveDelta.y
+
+    # Snap the movement to the next interval smaller than the actual movement.
+    var snap_x = floor(move_x / snap_interval.x) * snap_interval.x
+    var snap_y = floor(move_y / snap_interval.y) * snap_interval.y
+
+    # If we're closer to the next interval larger than the actual movement, we snap there instead.
+    if fmod(move_x, snap_interval.x) > snap_interval.x / 2:
+        snap_x += snap_interval.x
+    if fmod(move_y, snap_interval.y) > snap_interval.y / 2:
+        snap_y += snap_interval.y
+    
+    # As the basis for our transform, we take the transform from BEFORE any mouse movement.
+    var move_transform = select_tool.preDragTransform
+    # We simply add our calculated snap distance to said transformation.
+    move_transform.origin += Vector2(snap_x, snap_y)
+
+    # From there we simply need to apply the transformation.
+    # This function will update all objects based on the transform.
+    select_tool.ApplyTransforms(move_transform)
+    # And finally we also need to move the box around our moved objects to the correct position as well.
+    select_tool.transformBox.position = move_transform.origin
+
+
+# Updates any point that is currently being edited in a given tool.
+# Meaning we are in polygon or path editing mode and are dragging the point to a new position.
+# This is only changing the preview of the path or polygon to the new position.
+# The proper change already works normally by simply changing the default position, hence doesn't need to be updated.
 func _update_poly_selection(apply_to_tool):
-    var is_edit_mode = Global.Editor.Tools[apply_to_tool].get_EditPoints().pressed
-    var is_tool_active = Global.Editor.ActiveToolName == apply_to_tool
-    var is_looking_at_vertex = Global.WorldUI.Vertex != null
-    var is_dragging_mouse = Input.is_mouse_button_pressed(BUTTON_LEFT)
-    if is_edit_mode and is_looking_at_vertex and is_dragging_mouse and is_tool_active:
-        # False is important here. Otherwise it saves the changes. Found out the hard way. TYVM to MBMM!
-        Global.Editor.Tools[apply_to_tool].UpdateSelectionPosition(false)
+    # Asset that the given tool is in editing mode, aka. the 'Edit Points' button is toggled.
+    if not Global.Editor.Tools[apply_to_tool].get_EditPoints().pressed:
+        return
+    # Assert that the given tool is the currently active tool.
+    if not Global.Editor.ActiveToolName == apply_to_tool:
+        return
+    # Assert that we have selected a vertex to edit.
+    if Global.WorldUI.Vertex == null:
+        return
+    # Assert that we are actually editing the Vertex and not just hovering it.
+    # Important to note that this key seems to currently be hard-coded, so we can't bind it to an action group either.
+    if not Input.is_mouse_button_pressed(BUTTON_LEFT):
+        return
+
+    # Prompt the selected tool to update the currently active polygon.
+    # It uses the previously assigned default position.
+    # Important that the tool actually has a polygon selected for editing, otherwise it crashes.
+    # False is important here. Otherwise it saves the changes. Found out the hard way. TYVM to MBMM!
+    Global.Editor.Tools[apply_to_tool].UpdateSelectionPosition(false)
 
 
+# Updates the current preview of the Object and Scatter Tools to our invisible Snappy Grid.
 func _update_object_placement(snap):
     var prop = Global.Editor.Tools["ObjectTool"].Preview
     prop.position = snap
     prop = Global.Editor.Tools["ScatterTool"].Preview
     prop.position = snap
 
+
+# Updates the preview of any box or circle shaped selections to snap to the grid.
 func _update_selection_box(snap):
+    # Only clones the box, so we need to set it again later.
     var box = Global.WorldUI.GetSelectionBox()
-    if not (box.position.x == 0 and box.position.y == 0 and box.position.x == 0 and box.position.y == 0):
-        box.end = snap
-        Global.WorldUI.SetSelectionBox(box)
+    # Return if the selection box is at the world origin, as the tool is inactive.
+    if box.position.x == 0 and box.position.y == 0 and box.position.x == 0 and box.position.y == 0:
+        return
+    
+    # The initial box position is already placed correctly.
+    # So we simply need to snap the End position of the box.
+    box.end = snap
+    # We still need to set the box again, as we only created a clone earlier.
+    Global.WorldUI.SetSelectionBox(box)
 
 
 # NOTES ON SNAPPING PORTALS TO WALLS
@@ -196,7 +245,7 @@ func _update_selection_box(snap):
 # Hence portals won't snap to walls
 # If there's a tool that ain't an issue with, I think this is it.
 # However they will still snap while freestanding.
-func _snap_portals(snap):
+func _update_portals(snap):
     #Global.Editor.Tools["PortalTool"].FindBestLocation(snap)
     #var portal_location = Global.Editor.Tools["PortalTool"].get_FoundSpot()
     #Global.WorldUI.Texture.Transform = portal_location
