@@ -74,8 +74,9 @@ func update(delta):
     _update_poly_selection("WallTool")
 
 
-    # TODO: update Select tool to conform to Snappy Grid.
     _update_select_tool()
+    _update_instant_drag()
+
 
     # Snaps portals, however only while they are freestanding.
     # Snapping portals to walls doesn't work as of now.
@@ -103,6 +104,18 @@ func update(delta):
     # Snaps the Building, Pattern, Water, etc. polygons to the Snappy Grid.
     _update_selection_box(snap)
 
+
+
+
+func _update_instant_drag():
+    var select_tool = Global.Editor.Tools["SelectTool"]
+    if select_tool.justManualMoved:
+        var i = 0
+        for movable in select_tool.movableThings:
+            var previous_position = select_tool.preMovePositions[i]
+            i += 1
+            var new_position = previous_position + select_tool.moveDelta
+            movable.position = get_snapped_position(new_position)
 
 
 func _update_select_tool():
