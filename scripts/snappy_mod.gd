@@ -6,36 +6,101 @@ const DEBUG_MODE = true
 # Tool parameters
 const TOOL_CATEGORY = "Settings"
 const TOOL_ID = "snappy_mod"
-const TOOL_NAME = "Snappy Settings"
+const TOOL_NAME = "Custom Snap Settings"
+const MOD_DISPLAY_NAME = "Custom Snap Mod"
 
 # Icon paths
 const TOOL_ICON_PATH = "icons/snappy_icon.png"
 const REWIND_ICON_PATH = "icons/rewind_icon.png"
 
 # The path for storing the mod's settings.
-const MOD_DATA_PATH = "user://snappy_mod_data.txt"
+const MOD_DATA_PATH = "user://custom_snap_mod_data.txt"
 
+const SAVE_DELAY = 0.25
 
 # The DD native sidebar where the tools are registered.
 var tool_panel = null
 
-# The offset by which the invisible grid we snap to is deplaced from the vanilla grid.
+# If true, snap to our invisible Snappy Grid, otherwise use default DD behaviour for snapping.
+var custom_snap_enabled = true
+# The offset by which the invisible Snappy Grid we snap to is deplaced from the vanilla grid.
 var snap_offset = Vector2(0, 0)
 # The space inbetween the invisible lines we snap to.
 var snap_interval = Vector2(64, 64)
 
+# If true, the offset and interval sliders' x and y sliders become linked and changing x changes y to the same value and the other way around.
+var lock_aspect = true
 
+# The HSlider UI Elements used for setting the offset and snap intervals.
+var offset_slider_x
+var offset_slider_y
+var interval_slider_x
+var interval_slider_y
+
+# A timer to put a slight delay between changing the sliders and saving so we don't save a million times.
+var save_timer = SAVE_DELAY
+var save_timer_running = false
 
 
 # Vanilla start function called by Dungeondraft when the mod is first loaded
 func start():
+
+    # Loading any previous saved settings.
+    load_user_settings()
 
     # Fetch tool panel for level selection.
     tool_panel = Global.Editor.Toolset.CreateModTool(self, TOOL_CATEGORY, TOOL_ID, TOOL_NAME, Global.Root + TOOL_ICON_PATH)
 
     tool_panel.BeginSection(true)
 
-    # Todo: CREATE ACTUAL USER INTERFACE HERE
+    # This button will disable custom snapping and return the snapping behaviour to vanilla DD for as long as it is in the off state.
+    var on_off_button = tool_panel.CreateCheckButton("Enabled", "", custom_snap_enabled)
+    on_off_button.connect("toggled", self, "_toggle_tool_enabled")
+    on_off_button.set_tooltip("Disable to return to vanilla snapping mechanics.")
+
+    # This button locks the horizontal and vertical axis for our selection sliders.
+    # After all most of the time the user does not need to have different behaviour for either axis.
+    var lock_aspect_button = tool_panel.CreateCheckButton("Lock Aspect Ratio", "", lock_aspect)
+    lock_aspect_button.connect("toggled", self, "_toggle_lock_aspect")
+    lock_aspect_button.set_tooltip("Keep this locked unless you need to have different snap spacing or offset for each axis.")
+
+    tool_panel.CreateSeparator()
+
+    # Creating label and slider to adjust the snap interval in the X axis.
+    tool_panel.CreateLabel("Horizontal Snap Spacing")
+    interval_slider_x = tool_panel.CreateSlider("", snap_interval.x, 1, 256, 1, false)
+    interval_slider_x.set_allow_greater(true)
+    interval_slider_x.connect("value_changed", self, "_changed_interval_x")
+
+    # Creating label and slider to adjust the snap interval in the Y axis.
+    tool_panel.CreateLabel("Vertical Snap Spacing")
+    interval_slider_y = tool_panel.CreateSlider("", snap_interval.y, 1, 256, 1, false)
+    interval_slider_y.set_allow_greater(true)
+    interval_slider_y.connect("value_changed", self, "_changed_interval_y")
+    
+    tool_panel.CreateSeparator()
+
+    # Creating label and slider to adjust the snap offset in the X axis.
+    tool_panel.CreateLabel("Horizontal Snap Offset")
+    offset_slider_x = tool_panel.CreateSlider("", snap_offset.x, 0, 256, 1, false)
+    offset_slider_x.set_allow_greater(true)
+    offset_slider_x.set_allow_lesser(true)
+    offset_slider_x.connect("value_changed", self, "_changed_offset_x")
+
+    # Creating label and slider to adjust the snap offset in the Y axis.
+    tool_panel.CreateLabel("Vertical Snap Offset")
+    offset_slider_y = tool_panel.CreateSlider("", snap_offset.y, 0, 256, 1, false)
+    offset_slider_y.set_allow_greater(true)
+    offset_slider_y.set_allow_lesser(true)
+    offset_slider_y.connect("value_changed", self, "_changed_offset_y")
+    
+    tool_panel.CreateSeparator()
+
+    # A small note to remind users to press the 'S' key.
+    tool_panel.CreateNote("Remember that toggling the vanilla snap on or off will also turn the %s's snap on or off. "
+            % MOD_DISPLAY_NAME
+            + "No need to return to this tool, simply press the '%s' key."
+            % InputMap.get_action_list("toggle_snap")[0].as_text())
 
 
     # If in DEBUG_MODE, print buttons for:
@@ -48,19 +113,109 @@ func start():
         var debug_button = tool_panel.CreateButton("DEBUG", Global.Root + REWIND_ICON_PATH)
         debug_button.connect("pressed", self, "_on_debug_button")
 
-    
-    
     tool_panel.EndSection()
 
-    print("[Snappy Mod] UI Layout: successful")
-    
+    print("[%s] UI Layout: successful" % MOD_DISPLAY_NAME)
+
+
+
+
+# Changes the aspect locking behaviour to the given state.
+# Usually called by the lock_aspect_button's toggled signal
+func _toggle_lock_aspect(new_state):
+    lock_aspect = new_state
+    if lock_aspect:
+        # immediately set the Y value and slider for the snap offset to that of the X slider.
+        offset_slider_y.value = offset_slider_x.value
+        snap_offset.y = offset_slider_x.value
+        # immediately set the Y value and slider for the snap interval to that of the X slider.
+        interval_slider_y.value = interval_slider_x.value
+        snap_interval.y = interval_slider_x.value
+    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
+    save_timer = SAVE_DELAY
+    save_timer_running = true
+
+
+# Sets the flag to disable/enable the tool and return to/from vanilla DD snapping mechanics.
+func _toggle_tool_enabled(new_state):
+    custom_snap_enabled = new_state
+    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
+    save_timer = SAVE_DELAY
+    save_timer_running = true
+
+
+# Sets the new snap offset in the X axis.
+# Also sets the offset_slider_y and offset in the Y axis if the snap aspect is locked.
+# Usually called by the offset_slider_x
+func _changed_offset_x(value):
+    snap_offset.x = value
+    # If aspect locked, we also need to set the slider for the other axis (our slider already changed), and of course both values.
+    if lock_aspect:
+        snap_offset.y = value
+        offset_slider_y.value = value
+    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
+    save_timer = SAVE_DELAY
+    save_timer_running = true
+
+
+# Sets the new snap offset in the Y axis.
+# Also sets the offset_slider_X and offset in the X axis if the snap aspect is locked.
+# Usually called by the offset_slider_y
+func _changed_offset_y(value):
+    snap_offset.y = value
+    # If aspect locked, we also need to set the slider for the other axis (our slider already changed), and of course both values.
+    if lock_aspect:
+        snap_offset.x = value
+        offset_slider_x.value = value
+    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
+    save_timer = SAVE_DELAY
+    save_timer_running = true
+
+
+# Sets the new snap interval in the X axis.
+# Also sets the interval_slider_y and interval in the Y axis if the snap aspect is locked.
+# Usually called by the interval_slider_x
+func _changed_interval_x(value):
+    snap_interval.x = value
+    # If aspect locked, we also need to set the slider for the other axis (our slider already changed), and of course both values.
+    if lock_aspect:
+        snap_interval.y = value
+        interval_slider_y.value = value
+    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
+    save_timer = SAVE_DELAY
+    save_timer_running = true
+
+
+# Sets the new snap interval in the Y axis.
+# Also sets the interval_slider_x and interval in the X axis if the snap aspect is locked.
+# Usually called by the interval_slider_y
+func _changed_interval_y(value):
+    snap_interval.y = value
+    # If aspect locked, we also need to set the slider for the other axis (our slider already changed), and of course both values.
+    if lock_aspect:
+        snap_interval.x = value
+        interval_slider_x.value = value
+    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
+    save_timer = SAVE_DELAY
+    save_timer_running = true
+
 
 
 
 # Vanilla update called by Godot every frame.
 func update(delta):
-    # We only want to snap when the user actually has snapping enabled.
-    if not Global.Editor.IsSnapping:
+    # Check to see if we need to save our user settings.
+    if save_timer_running:
+        # Timer still running.
+        if save_timer > 0:
+            save_timer -= delta
+        else:
+            # Save settings and turn timer off.
+            save_timer_running = false
+            save_user_settings()
+
+    # If the user currently wishes to use default snapping, or has snapping disabled entirely, we return as we do not want to snap to anything.
+    if not (custom_snap_enabled and Global.Editor.IsSnapping):
         return
 
     # Our current cursor position, adjusted to snap to our invisible Snappy Grid.
@@ -125,6 +280,23 @@ func get_snapped_position(target_position):
     return Vector2(snap_x + snap_offset.x, snap_y + snap_offset.y)
 
 
+# Snap the delta of a given movement based on our snap interval.
+# Since the movement is not linked to a position, we ignore the offset.
+# Returns a new delta, which is the old delta snapped to the closest multiple of our snap interval.
+func get_snapped_movement(move_delta):
+    # Snap the movement to the next interval smaller than the actual movement.
+    var snap_x = floor(move_delta.x / snap_interval.x) * snap_interval.x
+    var snap_y = floor(move_delta.y / snap_interval.y) * snap_interval.y
+
+    # If we're closer to the next interval larger than the actual movement, we snap there instead.
+    if fmod(move_delta.x, snap_interval.x) > snap_interval.x / 2:
+        snap_x += snap_interval.x
+    if fmod(move_delta.y, snap_interval.y) > snap_interval.y / 2:
+        snap_y += snap_interval.y
+
+    # Returning the new delta. Not a position.
+    return Vector2(snap_x, snap_y)
+
 
 # Snaps the instant drag of the Select Tool to our invisible Snappy Grid.
 # It's important to note that we don't snap to our cursors position but rather relative to the cursor movement.
@@ -155,26 +327,11 @@ func _update_select_tool():
     # Return if we aren't actually currently moving anything with the Select Tool.
     if select_tool.transformMode != 1:
         return
-    
-    # The distance of our mouse movement from our initial position.
-    # We want to snap this to the closest interval.
-    var move_x = select_tool.moveDelta.x
-    var move_y = select_tool.moveDelta.y
 
-    # Snap the movement to the next interval smaller than the actual movement.
-    var snap_x = floor(move_x / snap_interval.x) * snap_interval.x
-    var snap_y = floor(move_y / snap_interval.y) * snap_interval.y
-
-    # If we're closer to the next interval larger than the actual movement, we snap there instead.
-    if fmod(move_x, snap_interval.x) > snap_interval.x / 2:
-        snap_x += snap_interval.x
-    if fmod(move_y, snap_interval.y) > snap_interval.y / 2:
-        snap_y += snap_interval.y
-    
     # As the basis for our transform, we take the transform from BEFORE any mouse movement.
     var move_transform = select_tool.preDragTransform
     # We simply add our calculated snap distance to said transformation.
-    move_transform.origin += Vector2(snap_x, snap_y)
+    move_transform.origin += get_snapped_movement(select_tool.moveDelta)
 
     # From there we simply need to apply the transformation.
     # This function will update all objects based on the transform.
@@ -256,12 +413,20 @@ func _update_portals(snap):
 # Saves the user settings as JSON in the MOD_DATA_PATH
 func save_user_settings():
     var data = {
-        "snappy_mod_data": "Yikes! It looks like this version doesn't have any data yet."
+        "custom_snap_enabled": custom_snap_enabled,
+        "lock_aspect": lock_aspect,
+        "snap_interval_x": snap_interval.x,
+        "snap_interval_y": snap_interval.y,
+        "snap_offset_x": snap_offset.x,
+        "snap_offset_y": snap_offset.y
     }
+    # Opening/creating of the actual file and writing of the data here.
     var file = File.new()
     file.open(MOD_DATA_PATH, File.WRITE)
     file.store_line(JSON.print(data, "\t"))
     file.close()
+
+    print("[%s] Saving user settings: successful" % MOD_DISPLAY_NAME)
 
 
 # Loads the user settings from the MOD_DATA_PATH
@@ -272,14 +437,23 @@ func load_user_settings():
     
     # If we cannot read the file, stop this attempt and leave the respective values at their default.
     if error != 0:
-        print("[Snappy Mod] Loading user settings: no user settings found")
+        print("[%s] Loading user settings: no user settings found" % MOD_DISPLAY_NAME)
         return
 
+    # Loading, parsing, and closing the file.
     var line = file.get_as_text()
     var data = JSON.parse(line).result
     file.close()
 
-    print("[Snappy Mod] Loading user settings: successful")
+    # Writing user settings back where they belong.
+    custom_snap_enabled = data["custom_snap_enabled"]
+    lock_aspect = data["lock_aspect"]
+    snap_offset.x = data["snap_offset_x"]
+    snap_offset.y = data["snap_offset_y"]
+    snap_interval.x = data["snap_interval_x"]
+    snap_interval.y = data["snap_interval_y"]
+
+    print("[%s] Loading user settings: successful" % MOD_DISPLAY_NAME)
 
 
 
@@ -297,7 +471,7 @@ func _on_debug_button():
 #    load_user_settings()
 #    print_levels()
 #    print_methods(Global.Editor.Tools["SelectTool"])
-    print_properties(Global.Editor.Tools["SelectTool"])
+#    print_properties(Global.Editor.Tools["SelectTool"])
 #    print_signals(Global.Editor.Tools["PathTool"])
 #    Global.World.print_tree_pretty()
 
