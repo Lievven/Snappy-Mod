@@ -33,20 +33,20 @@ A. Using these, you can move all the snap points an equal distance. Useful when 
 Q. Offset tool? Where can I find that? \
 A. Enable the advanced section of the tool.
 
-Q. I was hoping I could set my own distance for the snapping. \
+Q. I was hoping I could set my own distance for the snapping points. \
 A. You can! Simply enable the advanced section of the tool.
 
 Q. Why is there 2 sliders for spacing and offset each? \
 A. If you turn off the locked aspect ratio, you can set a separate spacing and offset for each axis. Useful for isometric maps.
 
-Q. What does the 'Lock Aspect Ratio' toggle do? \
-A. Turning it off lets you use the sliders for each axis separately (see the point above). This behaviour is turned off by default so you don't have to change 2 values every time.
+Q. What are the 'Lock Aspect Ratio' toggles doing? \
+A. Turning them off lets you use the sliders for each axis separately (see the point above). This behaviour is turned off by default so you don't have to change 2 values every time.
 
 Q. Nothing is snapping anymore. \
-A. Have you accidentally disabled the mod or turned off snapping altogether? Try pressing 'S'. Or maybe you're just using a very fine snapping resolution.
+A. Have you accidentally disabled the mod or turned off snapping altogether? Try pressing 'S'. Or maybe you're just using a very fine snapping resolution. Try lowering the spacing.
 
 Q. The snapping is back to vanilla. \
-A. You might have disabled the mod. Or, alternatively, set the snap spacing to either 128 or 256 which are the default values for normal snapping and half snapping.
+A. You might have disabled the mod. Or alternatively you might have set the snap spacing to either 256 or 128 which are the default values for normal snapping and half snapping.
 
 
 ### Compatibility.

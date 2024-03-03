@@ -97,12 +97,6 @@ func start():
     advanced_settings_section.visible = advanced_section_enabled
 
     tool_panel.CreateSeparator()
-    
-    # This button locks the horizontal and vertical axis for our selection sliders.
-    # After all most of the time the user does not need to have different behaviour for either axis.
-    var lock_aspect_interval_button = tool_panel.CreateCheckButton("Lock Aspect Ratio", "", lock_aspect_interval)
-    lock_aspect_interval_button.connect("toggled", self, "_toggle_lock_aspect_interval")
-    lock_aspect_interval_button.set_tooltip("Locks aspect ration between the spacing sliders. Keep this locked unless you need to have different snap spacing for each axis.")
 
     # Creating label and slider to adjust the snap interval in the X axis.
     tool_panel.CreateLabel("Horizontal Spacing")
@@ -118,13 +112,13 @@ func start():
     interval_slider_y.set_value(old_interval.y)
     interval_slider_y.connect("value_changed", self, "_changed_interval_y")
     
-    tool_panel.CreateSeparator()
-    
     # This button locks the horizontal and vertical axis for our selection sliders.
     # After all most of the time the user does not need to have different behaviour for either axis.
-    var lock_aspect_offset_button = tool_panel.CreateCheckButton("Lock Aspect Ratio", "", lock_aspect_offset)
-    lock_aspect_offset_button.connect("toggled", self, "_toggle_lock_aspect_offset")
-    lock_aspect_offset_button.set_tooltip("Locks aspect ration between the offset sliders. Keep this locked unless you need to have different snap spacing for each axis.")
+    var lock_aspect_interval_button = tool_panel.CreateCheckButton("Lock Aspect Ratio", "", lock_aspect_interval)
+    lock_aspect_interval_button.connect("toggled", self, "_toggle_lock_aspect_interval")
+    lock_aspect_interval_button.set_tooltip("Locks aspect ration between the spacing sliders. Keep this locked unless you need to have different snap spacing for each axis.")
+    
+    tool_panel.CreateSeparator()
 
     # Creating label and slider to adjust the snap offset in the X axis.
     tool_panel.CreateLabel("Horizontal Offset (Right)")
@@ -141,6 +135,12 @@ func start():
     offset_slider_y.set_allow_lesser(true)
     offset_slider_y.set_value(old_offset.y)
     offset_slider_y.connect("value_changed", self, "_changed_offset_y")
+    
+    # This button locks the horizontal and vertical axis for our selection sliders.
+    # After all most of the time the user does not need to have different behaviour for either axis.
+    var lock_aspect_offset_button = tool_panel.CreateCheckButton("Lock Aspect Ratio", "", lock_aspect_offset)
+    lock_aspect_offset_button.connect("toggled", self, "_toggle_lock_aspect_offset")
+    lock_aspect_offset_button.set_tooltip("Locks aspect ration between the offset sliders. Keep this locked unless you need to have different snap spacing for each axis.")
     
     tool_panel.CreateSeparator()
 
