@@ -1,7 +1,7 @@
 var script_class = "tool"
 
 # Set to true to show debug buttons
-const DEBUG_MODE = true
+const DEBUG_MODE = false
 
 # Tool parameters
 const TOOL_CATEGORY = "Settings"
@@ -16,6 +16,7 @@ const REWIND_ICON_PATH = "icons/rewind_icon.png"
 # The path for storing the mod's settings.
 const MOD_DATA_PATH = "user://custom_snap_mod_data.txt"
 
+# The amount of time we wait before saving when modifying a setting, in case there's other modifications coming in.
 const SAVE_DELAY = 0.25
 
 # The DD native sidebar where the tools are registered.
@@ -23,13 +24,24 @@ var tool_panel = null
 
 # If true, snap to our invisible Snappy Grid, otherwise use default DD behaviour for snapping.
 var custom_snap_enabled = true
-# The offset by which the invisible Snappy Grid we snap to is deplaced from the vanilla grid.
-var snap_offset = Vector2(0, 0)
-# The space inbetween the invisible lines we snap to.
-var snap_interval = Vector2(64, 64)
 
 # If true, the offset and interval sliders' x and y sliders become linked and changing x changes y to the same value and the other way around.
-var lock_aspect = true
+var lock_aspect_offset = true
+var lock_aspect_interval = true
+
+# The offset by which the invisible Snappy Grid we snap to is deplaced from the vanilla grid.
+var snap_offset = Vector2(0, 0)
+var old_offset = Vector2(0, 0)
+# The space inbetween the invisible lines we snap to.
+var snap_interval = Vector2(32, 32)
+var old_interval = Vector2(32, 32)
+
+
+# The current preset for the preset menu.
+var preset_menu_setting = 2
+var was_custom_mode = false
+# The option button for the preset menu.
+var preset_menu
 
 # The HSlider UI Elements used for setting the offset and snap intervals.
 var offset_slider_x
@@ -41,6 +53,13 @@ var interval_slider_y
 var save_timer = SAVE_DELAY
 var save_timer_running = false
 
+# The section containing the settings for more advanced users.
+var advanced_settings_section
+# The button for expanding or closing the advanced user section.
+var enable_advanced_button
+# Whether or not the user can interact with the advanced section.
+var advanced_section_enabled = false
+
 
 # Vanilla start function called by Dungeondraft when the mod is first loaded
 func start():
@@ -51,57 +70,91 @@ func start():
     # Fetch tool panel for level selection.
     tool_panel = Global.Editor.Toolset.CreateModTool(self, TOOL_CATEGORY, TOOL_ID, TOOL_NAME, Global.Root + TOOL_ICON_PATH)
 
-    tool_panel.BeginSection(true)
+    # Begin core section
+    tool_panel.BeginSection(false)
 
     # This button will disable custom snapping and return the snapping behaviour to vanilla DD for as long as it is in the off state.
     var on_off_button = tool_panel.CreateCheckButton("Enabled", "", custom_snap_enabled)
     on_off_button.connect("toggled", self, "_toggle_tool_enabled")
     on_off_button.set_tooltip("Disable to return to vanilla snapping mechanics.")
+    
+    # The preset menu offers all the most important presets. Most users probably don't need any other settings.
+    preset_menu = tool_panel.CreateLabeledDropdownMenu("", "Presets", ["Custom", "1/4 Tile (64px)", "1/8 Tile (32px)", "1/16 Tile (16px)", "1/32 Tile (8px)"], "Error")
+    preset_menu.connect("item_selected", self, "_change_preset")
+    preset_menu.selected = preset_menu_setting
+    preset_menu.set_tooltip("Most practical presets for the snap spacing. For most users, they're all you'll ever need.")
 
-    # This button locks the horizontal and vertical axis for our selection sliders.
-    # After all most of the time the user does not need to have different behaviour for either axis.
-    var lock_aspect_button = tool_panel.CreateCheckButton("Lock Aspect Ratio", "", lock_aspect)
-    lock_aspect_button.connect("toggled", self, "_toggle_lock_aspect")
-    lock_aspect_button.set_tooltip("Keep this locked unless you need to have different snap spacing or offset for each axis.")
+    # This button will disable custom snapping and return the snapping behaviour to vanilla DD for as long as it is in the off state.
+    enable_advanced_button = tool_panel.CreateCheckButton("Enable Advanced", "", advanced_section_enabled)
+    enable_advanced_button.connect("toggled", self, "_enable_advanced_section")
+    enable_advanced_button.set_tooltip("Turn on to enable the advanced settings for this mod.")
+
+    # End core section
+    tool_panel.EndSection()
+    
+    # Begin advanced section
+    advanced_settings_section = tool_panel.BeginSection(false)
+    advanced_settings_section.visible = advanced_section_enabled
 
     tool_panel.CreateSeparator()
+    
+    # This button locks the horizontal and vertical axis for our selection sliders.
+    # After all most of the time the user does not need to have different behaviour for either axis.
+    var lock_aspect_interval_button = tool_panel.CreateCheckButton("Lock Aspect Ratio", "", lock_aspect_interval)
+    lock_aspect_interval_button.connect("toggled", self, "_toggle_lock_aspect_interval")
+    lock_aspect_interval_button.set_tooltip("Locks aspect ration between the spacing sliders. Keep this locked unless you need to have different snap spacing for each axis.")
 
     # Creating label and slider to adjust the snap interval in the X axis.
-    tool_panel.CreateLabel("Horizontal Snap Spacing")
-    interval_slider_x = tool_panel.CreateSlider("", snap_interval.x, 1, 256, 1, false)
+    tool_panel.CreateLabel("Horizontal Spacing")
+    interval_slider_x = tool_panel.CreateSlider("", 32, 1, 256, 1, false)
     interval_slider_x.set_allow_greater(true)
+    interval_slider_x.set_value(old_interval.x)
     interval_slider_x.connect("value_changed", self, "_changed_interval_x")
 
     # Creating label and slider to adjust the snap interval in the Y axis.
-    tool_panel.CreateLabel("Vertical Snap Spacing")
-    interval_slider_y = tool_panel.CreateSlider("", snap_interval.y, 1, 256, 1, false)
+    tool_panel.CreateLabel("Vertical Spacing")
+    interval_slider_y = tool_panel.CreateSlider("", 32, 1, 256, 1, false)
     interval_slider_y.set_allow_greater(true)
+    interval_slider_y.set_value(old_interval.y)
     interval_slider_y.connect("value_changed", self, "_changed_interval_y")
     
     tool_panel.CreateSeparator()
+    
+    # This button locks the horizontal and vertical axis for our selection sliders.
+    # After all most of the time the user does not need to have different behaviour for either axis.
+    var lock_aspect_offset_button = tool_panel.CreateCheckButton("Lock Aspect Ratio", "", lock_aspect_offset)
+    lock_aspect_offset_button.connect("toggled", self, "_toggle_lock_aspect_offset")
+    lock_aspect_offset_button.set_tooltip("Locks aspect ration between the offset sliders. Keep this locked unless you need to have different snap spacing for each axis.")
 
     # Creating label and slider to adjust the snap offset in the X axis.
-    tool_panel.CreateLabel("Horizontal Snap Offset")
-    offset_slider_x = tool_panel.CreateSlider("", snap_offset.x, 0, 256, 1, false)
+    tool_panel.CreateLabel("Horizontal Offset (Right)")
+    offset_slider_x = tool_panel.CreateSlider("", 32, 0, 256, 1, false)
     offset_slider_x.set_allow_greater(true)
     offset_slider_x.set_allow_lesser(true)
+    offset_slider_x.set_value(old_offset.x)
     offset_slider_x.connect("value_changed", self, "_changed_offset_x")
 
     # Creating label and slider to adjust the snap offset in the Y axis.
-    tool_panel.CreateLabel("Vertical Snap Offset")
-    offset_slider_y = tool_panel.CreateSlider("", snap_offset.y, 0, 256, 1, false)
+    tool_panel.CreateLabel("Vertical Offset (Down)")
+    offset_slider_y = tool_panel.CreateSlider("", 32, 0, 256, 1, false)
     offset_slider_y.set_allow_greater(true)
     offset_slider_y.set_allow_lesser(true)
+    offset_slider_y.set_value(old_offset.y)
     offset_slider_y.connect("value_changed", self, "_changed_offset_y")
     
     tool_panel.CreateSeparator()
+
+    # End advanced section
+    tool_panel.EndSection()
+
+    # Begin notes and debug section.
+    tool_panel.BeginSection(true)
 
     # A small note to remind users to press the 'S' key.
     tool_panel.CreateNote("Remember that toggling the vanilla snap on or off will also turn the %s's snap on or off. "
             % MOD_DISPLAY_NAME
             + "No need to return to this tool, simply press the '%s' key."
             % InputMap.get_action_list("toggle_snap")[0].as_text())
-
 
     # If in DEBUG_MODE, print buttons for:
     # Debug button that prints a lot of useful information
@@ -118,88 +171,167 @@ func start():
     print("[%s] UI Layout: successful" % MOD_DISPLAY_NAME)
 
 
+# Changes the currently selected preset.
+func _change_preset(preset_index):
+    preset_menu_setting = preset_index
+    match preset_index:
+        0:
+            # Load the old custom mode settings.
+            _set_to_custom_mode()
+        1:
+            # Otherwise store the old custom presets (if we have any) and load the selected preset
+            _preserve_custom_mode()
+            snap_offset = Vector2(0, 0)
+            snap_interval = Vector2(64, 64)
+        2:
+            _preserve_custom_mode()
+            snap_offset = Vector2(0, 0)
+            snap_interval = Vector2(32, 32)
+        3:
+            _preserve_custom_mode()
+            snap_offset = Vector2(0, 0)
+            snap_interval = Vector2(16, 16)
+        4:
+            _preserve_custom_mode()
+            snap_offset = Vector2(0, 0)
+            snap_interval = Vector2(8, 8)
+    _schedule_save()
 
 
-# Changes the aspect locking behaviour to the given state.
-# Usually called by the lock_aspect_button's toggled signal
-func _toggle_lock_aspect(new_state):
-    lock_aspect = new_state
-    if lock_aspect:
+# Makes sure that we are set into custom mode.
+# If we were not set into custom mode, loads all the necessary data from our last custom mode edits.
+func _set_to_custom_mode():
+    # If we were already in custom mode, we don't need to do anything.
+    if was_custom_mode:
+        return
+
+    # Otherwise, set ourselves to custom mode.
+    was_custom_mode = true
+    # Also update the presets menu in case this was called by one of the sliders.
+    preset_menu_setting = 0
+    preset_menu.selected = 0
+    
+    # And finally load our last used custom mode settings.
+    snap_offset = old_offset
+    snap_interval = old_interval
+    
+
+
+# If we are in custom mode and changing to a different preset, save the custom settings to retrieve them later.
+func _preserve_custom_mode():
+    # If we weren't in custom mode, don't do anything or we overwrite our important data.
+    if !was_custom_mode:
+        return
+    
+    # If we were in custom mode, preserve the necessary data.
+    was_custom_mode = false
+    old_offset = snap_offset
+    old_interval = snap_interval
+
+
+# Enables to disables the advanced settings section.
+func _enable_advanced_section(new_state):
+    # Enable or disnable the preset selector's custom button based on whether we use advanced settings or not.
+    enable_advanced_button.set_item_disabled(0, new_state)
+    advanced_section_enabled = new_state
+    advanced_settings_section.visible = new_state
+    _schedule_save()
+
+
+# Changes the snap interval's aspect locking behaviour to the given state.
+# Usually called by the lock_aspect_interval_button's toggled signal
+func _toggle_lock_aspect_interval(new_state):
+    lock_aspect_interval = new_state
+    if lock_aspect_interval:
+        # immediately set the Y value and slider for the snap interval to that of the X slider.
+        interval_slider_y.value = interval_slider_x.value
+        snap_interval.y = snap_interval.x
+    _schedule_save()
+
+# Changes the snap offset's aspect locking behaviour to the given state.
+# Usually called by the lock_aspect_offset_button's toggled signal
+func _toggle_lock_aspect_offset(new_state):
+    lock_aspect_offset = new_state
+    if lock_aspect_offset:
         # immediately set the Y value and slider for the snap offset to that of the X slider.
         offset_slider_y.value = offset_slider_x.value
         snap_offset.y = offset_slider_x.value
-        # immediately set the Y value and slider for the snap interval to that of the X slider.
-        interval_slider_y.value = interval_slider_x.value
-        snap_interval.y = interval_slider_x.value
-    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
-    save_timer = SAVE_DELAY
-    save_timer_running = true
+    _schedule_save()
 
 
 # Sets the flag to disable/enable the tool and return to/from vanilla DD snapping mechanics.
 func _toggle_tool_enabled(new_state):
     custom_snap_enabled = new_state
-    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
-    save_timer = SAVE_DELAY
-    save_timer_running = true
+    _schedule_save()
 
 
 # Sets the new snap offset in the X axis.
 # Also sets the offset_slider_y and offset in the Y axis if the snap aspect is locked.
 # Usually called by the offset_slider_x
 func _changed_offset_x(value):
+    # Set to custom mode first, as we'll have to overwrite this value with the new one we just received
+    _set_to_custom_mode()
+
     snap_offset.x = value
     # If aspect locked, we also need to set the slider for the other axis (our slider already changed), and of course both values.
-    if lock_aspect:
+    if lock_aspect_offset:
         snap_offset.y = value
         offset_slider_y.value = value
-    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
-    save_timer = SAVE_DELAY
-    save_timer_running = true
+    _schedule_save()
 
 
 # Sets the new snap offset in the Y axis.
-# Also sets the offset_slider_X and offset in the X axis if the snap aspect is locked.
+# Also sets the offset_slider_x and offset in the X axis if the snap aspect is locked.
 # Usually called by the offset_slider_y
 func _changed_offset_y(value):
+    # Set to custom mode first, as we'll have to overwrite this value with the new one we just received
+    _set_to_custom_mode()
+
     snap_offset.y = value
     # If aspect locked, we also need to set the slider for the other axis (our slider already changed), and of course both values.
-    if lock_aspect:
+    if lock_aspect_offset:
         snap_offset.x = value
         offset_slider_x.value = value
-    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
-    save_timer = SAVE_DELAY
-    save_timer_running = true
+    _schedule_save()
 
 
 # Sets the new snap interval in the X axis.
 # Also sets the interval_slider_y and interval in the Y axis if the snap aspect is locked.
 # Usually called by the interval_slider_x
 func _changed_interval_x(value):
+    # Set to custom mode first, as we'll have to overwrite this value with the new one we just received
+    _set_to_custom_mode()
+
     snap_interval.x = value
     # If aspect locked, we also need to set the slider for the other axis (our slider already changed), and of course both values.
-    if lock_aspect:
+    if lock_aspect_interval:
         snap_interval.y = value
         interval_slider_y.value = value
-    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
-    save_timer = SAVE_DELAY
-    save_timer_running = true
+    _schedule_save()
 
 
 # Sets the new snap interval in the Y axis.
 # Also sets the interval_slider_x and interval in the X axis if the snap aspect is locked.
 # Usually called by the interval_slider_y
 func _changed_interval_y(value):
+    # Set to custom mode first, as we'll have to overwrite this value with the new one we just received
+    _set_to_custom_mode()
+
     snap_interval.y = value
     # If aspect locked, we also need to set the slider for the other axis (our slider already changed), and of course both values.
-    if lock_aspect:
+    if lock_aspect_interval:
         snap_interval.x = value
         interval_slider_x.value = value
-    # Schedule new save. Always setting to max delay since we only want to save after not receiving any input for some time.
+    _set_to_custom_mode()
+    _schedule_save()
+
+
+# Schedule a new save.
+# We always up the delay to the maximum since the point is that we don't save immediately.
+# Otherwise we might be saving dozens of times within seconds, when we only need the last save anyway.
+func _schedule_save():
     save_timer = SAVE_DELAY
     save_timer_running = true
-
-
 
 
 # Vanilla update called by Godot every frame.
@@ -379,12 +511,33 @@ func _update_selection_box(snap):
     # Only clones the box, so we need to set it again later.
     var box = Global.WorldUI.GetSelectionBox()
     # Return if the selection box is at the world origin, as the tool is inactive.
-    if box.position.x == 0 and box.position.y == 0 and box.position.x == 0 and box.position.y == 0:
+    if box.position.x == 0 and box.position.y == 0 and box.size.x == 0 and box.size.y == 0:
         return
     
-    # The initial box position is already placed correctly.
-    # So we simply need to snap the End position of the box.
-    box.end = snap
+    # Dungeondraft is a bit convoluted here as it doesn't seem to save the original position of the box.
+    # Instead, to "invert" the box when the box extends towards the negative directions, it simply swaps the position and end values.
+    # That's bad for us, because we modify them yet we don't know which one is the origin.
+    # Hacky solution: we find where vanilla DD would snap the box to.
+    var vanilla_snap = Global.WorldUI.GetSnappedPosition(Global.WorldUI.MousePosition)
+
+    # If the current X coordinate of the box is where vanilla DD would snap to, we adjust it while preserving the origin (in this case end.x) of the box.
+    if box.position.x == vanilla_snap.x:
+        var end = box.end.x
+        box.position.x = snap.x
+        box.end.x = end
+    # Otherwise we can simply write our value into the end, as the origin (in this case position.x) is already preserved
+    else:
+        box.end.x = snap.x
+
+    # If the current Y coordinate of the box is where vanilla DD would snap to, we adjust it while preserving the origin (in this case end.y) of the box.
+    if box.position.y == vanilla_snap.y:
+        var end = box.end.y
+        box.position.y = snap.y
+        box.end.y = end
+    # Otherwise we can simply write our value into the end, as the origin (in this case position.y) is already preserved
+    else:
+        box.end.y = snap.y
+
     # We still need to set the box again, as we only created a clone earlier.
     Global.WorldUI.SetSelectionBox(box)
 
@@ -414,11 +567,18 @@ func _update_portals(snap):
 func save_user_settings():
     var data = {
         "custom_snap_enabled": custom_snap_enabled,
-        "lock_aspect": lock_aspect,
+        "preset_menu_setting": preset_menu_setting,
+        "advanced_section_enabled": advanced_section_enabled,
+        "lock_aspect_offset": lock_aspect_offset,
+        "lock_aspect_interval": lock_aspect_interval,
         "snap_interval_x": snap_interval.x,
         "snap_interval_y": snap_interval.y,
+        "old_interval_x": old_interval.x,
+        "old_interval_y": old_interval.y,
         "snap_offset_x": snap_offset.x,
-        "snap_offset_y": snap_offset.y
+        "snap_offset_y": snap_offset.y,
+        "old_offset_x": old_offset.x,
+        "old_offset_y": old_offset.y
     }
     # Opening/creating of the actual file and writing of the data here.
     var file = File.new()
@@ -447,12 +607,20 @@ func load_user_settings():
 
     # Writing user settings back where they belong.
     custom_snap_enabled = data["custom_snap_enabled"]
-    lock_aspect = data["lock_aspect"]
+    preset_menu_setting = data["preset_menu_setting"]
+    advanced_section_enabled = data["advanced_section_enabled"]
+    lock_aspect_offset = data["lock_aspect_offset"]
+    lock_aspect_interval = data["lock_aspect_interval"]
     snap_offset.x = data["snap_offset_x"]
     snap_offset.y = data["snap_offset_y"]
+    old_offset.x = data["old_offset_x"]
+    old_offset.y = data["old_offset_y"]
     snap_interval.x = data["snap_interval_x"]
     snap_interval.y = data["snap_interval_y"]
+    old_interval.x = data["old_interval_x"]
+    old_interval.y = data["old_interval_y"]
 
+    was_custom_mode = preset_menu_setting == 0
     print("[%s] Loading user settings: successful" % MOD_DISPLAY_NAME)
 
 
@@ -471,7 +639,7 @@ func _on_debug_button():
 #    load_user_settings()
 #    print_levels()
 #    print_methods(Global.Editor.Tools["SelectTool"])
-#    print_properties(Global.Editor.Tools["SelectTool"])
+#    print_properties(Global.WorldUI)
 #    print_signals(Global.Editor.Tools["PathTool"])
 #    Global.World.print_tree_pretty()
 

@@ -4,7 +4,7 @@ For all those who need finer control over where to snap to in Dungeondraft.
 
 ### Installation.
 1. Download the mod
-2. Extract the zip into your Dungeondraft mod folder.
+2. Extract the zip somewhere into your Dungeondraft mod folder.
 3. If you do not have a mod folder yet, the Mods tab will let you choose one.
 4. Use the mods tab to select the mod and simply open your map.
 
@@ -14,6 +14,7 @@ For all those who need finer control over where to snap to in Dungeondraft.
 - Switch between vanilla snapping and custom snapping using the 'Enable' button in this menu.
 - You can still turn off snapping altogether with the vanilla keybind ('S' by default).
 - With the mod and snapping enabled, all the tools should properly snap to the given grid.
+- Simply select a snapping resolution from the presets, or enable the advanced mode to set your own custom resolution or even an offset.
 
 
 ### FAQ.
@@ -29,6 +30,12 @@ A. It snaps based on distance moved. This is how it works in vanilla, too. You c
 Q. What are the offset sliders doing? \
 A. Using these, you can move all the snap points an equal distance. Useful when you want to place objects slightly off-centred from the grid. Pro tip: you can manually enter a negative value.
 
+Q. Offset tool? Where can I find that? \
+A. Enable the advanced section of the tool.
+
+Q. I was hoping I could set my own distance for the snapping. \
+A. You can! Simply enable the advanced section of the tool.
+
 Q. Why is there 2 sliders for spacing and offset each? \
 A. If you turn off the locked aspect ratio, you can set a separate spacing and offset for each axis. Useful for isometric maps.
 
@@ -36,7 +43,7 @@ Q. What does the 'Lock Aspect Ratio' toggle do? \
 A. Turning it off lets you use the sliders for each axis separately (see the point above). This behaviour is turned off by default so you don't have to change 2 values every time.
 
 Q. Nothing is snapping anymore. \
-A. Have you accidentally disabled the mod or turned off snapping altogether? Try pressing 'S'.
+A. Have you accidentally disabled the mod or turned off snapping altogether? Try pressing 'S'. Or maybe you're just using a very fine snapping resolution.
 
 Q. The snapping is back to vanilla. \
 A. You might have disabled the mod. Or, alternatively, set the snap spacing to either 128 or 256 which are the default values for normal snapping and half snapping.

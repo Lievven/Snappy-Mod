@@ -1,7 +1,7 @@
 {
-	"name": "Snappy Mod",
+	"name": "Custom Snap Mod",
 	"unique_id": "Lievven.Snappy_Mod",
-	"version": "0.1.0",
+	"version": "0.3.1",
 	"author": "Lievven",
 	"description": "Allows you to modify and offset the grid snap functionality.",
 	"dd_version": "1.1.0.6"
