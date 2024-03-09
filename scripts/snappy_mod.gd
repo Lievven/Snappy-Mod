@@ -42,6 +42,18 @@ var preset_menu_setting = 2
 var was_custom_mode = false
 # The option button for the preset menu.
 var preset_menu
+# This is all the options that will be in the preset menu.
+# The first option will always be "Custom", and afterwards all of these in order.
+# While not the cleanest implementation, I chose this for readability since some users indicated an interest into tinkering with this.
+# Just remember that if you are tinkering with this, fractions need to have a .0 given.
+var preset_menu_options = {
+        "1/4 Tile (64px)": Vector2(64, 64),
+        "1/8 Tile (32px)": Vector2(32, 32),
+        "1/16 Tile (16px)": Vector2(16, 16),
+        "1/32 Tile (8px)": Vector2(8, 8),
+        "1/3 Tile": Vector2(256.0/3, 256.0/3),
+        "1/5 Tile": Vector2(256.0/5, 256.0/5)
+        }
 
 # The HSlider UI Elements used for setting the offset and snap intervals.
 var offset_slider_x
@@ -79,7 +91,9 @@ func start():
     on_off_button.set_tooltip("Disable to return to vanilla snapping mechanics.")
     
     # The preset menu offers all the most important presets. Most users probably don't need any other settings.
-    preset_menu = tool_panel.CreateLabeledDropdownMenu("", "Presets", ["Custom", "1/4 Tile (64px)", "1/8 Tile (32px)", "1/16 Tile (16px)", "1/32 Tile (8px)"], "Error")
+    preset_menu = tool_panel.CreateLabeledDropdownMenu("", "Presets", ["Custom"], "Error")
+    for preset_item in preset_menu_options.keys():
+        preset_menu.add_item(preset_item)
     preset_menu.connect("item_selected", self, "_change_preset")
     preset_menu.selected = preset_menu_setting
     preset_menu.set_tooltip("Most practical presets for the snap spacing. For most users, they're all you'll ever need.")
@@ -174,28 +188,18 @@ func start():
 # Changes the currently selected preset.
 func _change_preset(preset_index):
     preset_menu_setting = preset_index
-    match preset_index:
-        0:
-            # Load the old custom mode settings.
-            _set_to_custom_mode()
-        1:
-            # Otherwise store the old custom presets (if we have any) and load the selected preset
-            _preserve_custom_mode()
-            snap_offset = Vector2(0, 0)
-            snap_interval = Vector2(64, 64)
-        2:
-            _preserve_custom_mode()
-            snap_offset = Vector2(0, 0)
-            snap_interval = Vector2(32, 32)
-        3:
-            _preserve_custom_mode()
-            snap_offset = Vector2(0, 0)
-            snap_interval = Vector2(16, 16)
-        4:
-            _preserve_custom_mode()
-            snap_offset = Vector2(0, 0)
-            snap_interval = Vector2(8, 8)
+    # If custom mode was selected, load the old custom mode settings and save the new settings.
+    if preset_index == 0:
+        _set_to_custom_mode()
+        _schedule_save()
+        return
+    
+    # Otherwise store the old custom presets (if we have any) and load the selected preset.
+    _preserve_custom_mode()
+    var selected_item = preset_menu.get_item_text(preset_index)
+    snap_interval = preset_menu_options[selected_item]
     _schedule_save()
+
 
 
 # Makes sure that we are set into custom mode.

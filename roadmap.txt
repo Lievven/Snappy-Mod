@@ -1,0 +1,19 @@
+⬢ Fix bug with coordinate display when using polygon tools.
+
+		⬢ Change Presets to dict. [DONE]
+
+⬢ Use ModMapData for per-map saves.
+
+⬢ Integrate with _Lib.
+
+⬢ Create API for other mods to integrate their tools.
+
+⬢ Fractions mode.
+
+⬢ Allow to save custom presets.
+
+⬢ Preset library in the prefab style.
+
+⬢ Implement custom grid overlay.
+
+⬢ ???
