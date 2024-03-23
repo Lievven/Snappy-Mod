@@ -75,6 +75,15 @@ var enable_advanced_button
 # Whether or not the user can interact with the advanced section.
 var advanced_section_enabled = false
 
+# Choosing between a Square grid, vertical hex grid, and horizontal hex grid geometry.
+# Vertical hexes are defined as having a flat top and bottom, hence allowing straight movement in the vertical but zig-zag movement in the horizontal axis.
+# Horizontal hexes are defined as having a pointy top and bottom, hence requiring a zig-zag movement in the vertical but straight movement in the horizontal axis.
+enum GEOMETRY {SQUARE, HEX_V, HEX_H}
+var active_geometry = GEOMETRY.HEX_H
+# If true, we measure the hexagon's radius from the centre to the corner.
+# Otherwise we measure the hexagon's radius as the shortest distance from the centre to the edge.
+var radial_mode_to_corner = true
+var hexagon_radius = 256
 
 # Vanilla start function called by Dungeondraft when the mod is first loaded
 func start():
@@ -89,7 +98,10 @@ func start():
     # Begin core section
     tool_panel.BeginSection(false)
 
-    tool_panel.CreateToggleGroup("", ["", "", ""], ["", "", "", ""], [Global.Root + SQUARE_ICON_PATH, Global.Root + HORIZONTAL_HEX_ICON_PATH, Global.Root + VERTICAL_HEX_ICON_PATH], 0)
+    var tg = tool_panel.CreateToggleGroup("ToggleID", ["ID1", "ID2", "ID3"], ["A", "B", "C"], [Global.Root + SQUARE_ICON_PATH, Global.Root + HORIZONTAL_HEX_ICON_PATH, Global.Root + VERTICAL_HEX_ICON_PATH], 0)
+    for toggle in tool_panel.get_child(2).get_children():
+        #toggle.connect("pressed", self, "_on_toggle_mode_changed")
+        print(toggle.text)
 
     # This button will disable custom snapping and return the snapping behaviour to vanilla DD for as long as it is in the off state.
     var on_off_button = tool_panel.CreateCheckButton("Enabled", "", custom_snap_enabled)
@@ -189,6 +201,11 @@ func start():
     tool_panel.EndSection()
 
     print("[%s] UI Layout: successful" % MOD_DISPLAY_NAME)
+
+
+# TODO: Totally useless.
+func _on_toggle_mode_changed(something = null):
+    print("Change", something)
 
 
 # Changes the currently selected preset.
@@ -399,6 +416,100 @@ func update(delta):
 
 # Calculate the closest position snapped to our invisible Snappy Grid from the given Vector2.
 func get_snapped_position(target_position):
+    match active_geometry:
+        GEOMETRY.SQUARE:
+            # Currently we're snapping to squares only, but in the future we'll also want to snap to hexagons.
+            return snap_square_position(target_position)
+        GEOMETRY.HEX_V:
+            return snap_vertical_hex_position(target_position)
+        GEOMETRY.HEX_H:
+            return snap_horizontal_hex_position(target_position)
+
+
+# IMPORTANT: we're snapping to the centre of hexes with a pointy top in this function, which is 90° off from vertical hexes.
+# That's because the user wants to snap to the VERTICES of the hexes, not solely the centres.
+# The vertices of vertical hexes just happen to be the centres of half as big, 90° rotated hexes.
+# The algorithm was nabbed from here: https://www.redblobgames.com/grids/hexagons/#pixel-to-hex
+# It's a very interesting read and an essential for game devs, so check it out.
+func snap_vertical_hex_position(target_position):
+    var size = get_hexagon_size()
+
+    # First, we need to convert our world coordinates into hexagon coordinates.
+    var q = (sqrt(3) / 3 * target_position.x - 1.0 / 3 * target_position.y) / size
+    var r = (2.0 / 3 * target_position.y) / size
+
+    # We can then round the hexagon coordinates to snap our cursor into the closest hexagon.
+    var hex = round_hex_coordinates(Vector2(q, r))
+
+    # Having snapped our cursor into position, we can then once again convert the hexagon coordinates into world coordinates.
+    var x = (sqrt(3) * hex.x + sqrt(3) / 2 * hex.y) * size
+    var y = (3.0 / 2 * hex.y) * size
+    return Vector2(x, y)
+
+
+# IMPORTANT: we're snapping to the centre of hexes with a flat top in this function, which is 90° off from horizontal hexes.
+# That's because the user wants to snap to the VERTICES of the hexes, not solely the centres.
+# The vertices of horizontal hexes just happen to be the centres of half as big, 90° rotated hexes.
+# The algorithm was nabbed from here: https://www.redblobgames.com/grids/hexagons/#pixel-to-hex
+# It's a very interesting read and an essential for game devs, so check it out.
+func snap_horizontal_hex_position(target_position):
+    var size = get_hexagon_size()
+
+    # First, we need to convert our world coordinates into hexagon coordinates.
+    var q = (2.0 / 3 * target_position.x) / size
+    var r = (-1.0 / 3 * target_position.x + sqrt(3) / 3 * target_position.y) / size
+
+    # We can then round the hexagon coordinates to snap our cursor into the closest hexagon.
+    var hex = round_hex_coordinates(Vector2(q, r))
+
+    # Having snapped our cursor into position, we can then once again convert the hexagon coordinates into world coordinates.
+    var x = (3.0 / 2 * hex.x) * size
+    var y = (sqrt(3) / 2 * hex.x + sqrt(3) * hex.y) * size
+    return Vector2(x, y)
+
+
+# A helper function to adjust the size of the hexagons.
+# Note that this is the inverse of the distances between the actual snap areas we calculate, as those need to be rotated 90° to our hex grid.
+func get_hexagon_size():
+    if radial_mode_to_corner:
+        return hexagon_radius / sqrt(3.0)
+    else:
+        return hexagon_radius / 1.5
+
+
+# Rounding coordinates in a hexagonal system (3-dimensional coordinates, meaning q, r, s overlap) to the closest hex.
+# This algorithm was nabbed from https://www.redblobgames.com/grids/hexagons/#rounding
+# It's a very interesting read that's an essential for every game dev, so go check it out.
+# This algorithm can be used by both styles of hex grid.
+# Input can be a Vector2 or Vector3, although only the x and y axes will be used.
+# Output is a Vector3 with the final axes being calculated from the first two.
+func round_hex_coordinates(fractional_hex):
+    # Rounding every coordinate to the closest integer.
+    # This may round one of the 3 coordinates to the wrong value.
+    var q = round(fractional_hex.x)
+    var r = round(fractional_hex.y)
+    var s = round(- fractional_hex.x - fractional_hex.y)
+
+    # Here we calculate which one of the values has the greatest deviation from the fractional values.
+    # That's the value which might be wrong.
+    var q_diff = abs(q - fractional_hex.x)
+    var r_diff = abs(r - fractional_hex.y)
+    var s_diff = abs(s + fractional_hex.x + fractional_hex.y)
+
+    # Finally, since the values overlap, we can simply calculate the correct value for it from the other 2 values.
+    if q_diff > r_diff and q_diff > s_diff:
+        q = -r-s
+    elif r_diff > s_diff:
+        r = -q-s
+    else:
+        s = -q-r
+    
+    # We return a 3 dimensional vector, although only the q and r dimension will be needed in all likelyhood.
+    return Vector3(q, r, s)
+
+
+# Calculate the closest position snapped to our invisible square Snappy Grid from the given Vector2.
+func snap_square_position(target_position):
     # Calculating snap for X axis
     # First we clean our snap offset from the position since we only want to work with the snap interval.
     var offset_snap = target_position.x - snap_offset.x
@@ -424,9 +535,22 @@ func get_snapped_position(target_position):
 
 
 # Snap the delta of a given movement based on our snap interval.
+func get_snapped_movement(move_delta):
+    match active_geometry:
+        GEOMETRY.SQUARE:
+            # Currently we're snapping to squares only, but in the future we'll also want to snap to hexagons.
+            snap_square_movement(move_delta)
+            print("square")
+        GEOMETRY.HEX_V:
+            print("vert hex")
+        GEOMETRY.HEX_H:
+            print("horiz hex")
+
+
+# Snap the delta of a given movement based on our square snap interval.
 # Since the movement is not linked to a position, we ignore the offset.
 # Returns a new delta, which is the old delta snapped to the closest multiple of our snap interval.
-func get_snapped_movement(move_delta):
+func snap_square_movement(move_delta):
     # Snap the movement to the next interval smaller than the actual movement.
     var snap_x = floor(move_delta.x / snap_interval.x) * snap_interval.x
     var snap_y = floor(move_delta.y / snap_interval.y) * snap_interval.y
@@ -685,11 +809,14 @@ func settings_from_dictionary(data):
 # Debug function, very important. Prints whatever stuff I need to know at the moment.
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
+    hexagon_radius = fmod(hexagon_radius + 64, 256)
+    print(hexagon_radius)
+#    print_children(tool_panel)
 #    print_parents(tool_panel)
 #    load_user_settings()
 #    print_levels()
 #    print_methods(Global.Editor.Tools["MapSettings"])
-#    print_properties(Global.Editor.Tools["MapSettings"])
+#    print_properties()
 #    print_signals(Global.Editor.Tools["PathTool"])
 #    Global.World.print_tree_pretty()
 
@@ -732,3 +859,10 @@ func print_signals(node):
     var signal_list = node.get_signal_list()
     for sig in signal_list:
         print(sig.name)
+
+
+# Debug function, prints all other nodes lower in the tree
+func print_children(node):
+    for child in node.get_children():
+        print(child.name, " ", child.text)
+        print_children(child)
