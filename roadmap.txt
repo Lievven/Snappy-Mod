@@ -2,7 +2,7 @@
 
 		⬢ Change Presets to dict. [DONE]
 
-⬢ Use ModMapData for per-map saves.
+	⬢ Use ModMapData for per-map saves. [Implemented, Untested]
 
 ⬢ Integrate with _Lib.
 

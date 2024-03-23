@@ -1,7 +1,7 @@
 var script_class = "tool"
 
 # Set to true to show debug buttons
-const DEBUG_MODE = false
+const DEBUG_MODE = true
 
 # Tool parameters
 const TOOL_CATEGORY = "Settings"
@@ -12,6 +12,9 @@ const MOD_DISPLAY_NAME = "Custom Snap Mod"
 # Icon paths
 const TOOL_ICON_PATH = "icons/snappy_icon.png"
 const REWIND_ICON_PATH = "icons/rewind_icon.png"
+const VERTICAL_HEX_ICON_PATH = "icons/hex_icon_vertical.png"
+const HORIZONTAL_HEX_ICON_PATH = "icons/hex_icon_horizontal.png"
+const SQUARE_ICON_PATH = "icons/square_icon.png"
 
 # The path for storing the mod's settings.
 const MOD_DATA_PATH = "user://custom_snap_mod_data.txt"
@@ -78,12 +81,15 @@ func start():
 
     # Loading any previous saved settings.
     load_user_settings()
+    load_local_settings()
 
     # Fetch tool panel for level selection.
     tool_panel = Global.Editor.Toolset.CreateModTool(self, TOOL_CATEGORY, TOOL_ID, TOOL_NAME, Global.Root + TOOL_ICON_PATH)
 
     # Begin core section
     tool_panel.BeginSection(false)
+
+    tool_panel.CreateToggleGroup("", ["", "", ""], ["", "", "", ""], [Global.Root + SQUARE_ICON_PATH, Global.Root + HORIZONTAL_HEX_ICON_PATH, Global.Root + VERTICAL_HEX_ICON_PATH], 0)
 
     # This button will disable custom snapping and return the snapping behaviour to vanilla DD for as long as it is in the off state.
     var on_off_button = tool_panel.CreateCheckButton("Enabled", "", custom_snap_enabled)
@@ -198,6 +204,7 @@ func _change_preset(preset_index):
     _preserve_custom_mode()
     var selected_item = preset_menu.get_item_text(preset_index)
     snap_interval = preset_menu_options[selected_item]
+    snap_offset = Vector2(0, 0)
     _schedule_save()
 
 
@@ -569,6 +576,60 @@ func _update_portals(snap):
 
 # Saves the user settings as JSON in the MOD_DATA_PATH
 func save_user_settings():
+    var data = settings_into_dictionary()
+    # Opening/creating of the actual file and writing of the data here.
+    var file = File.new()
+    file.open(MOD_DATA_PATH, File.WRITE)
+    file.store_line(JSON.print(data, "\t"))
+    file.close()
+
+    # Currently I simply save any change to both the map and the general settings.
+    # In the future I may only want to save changes locally, and only update global settings from elsewhere.
+    save_local_settings()
+    print("[%s] Saving user settings: successful" % MOD_DISPLAY_NAME)
+
+
+
+# Loads the user settings from the MOD_DATA_PATH
+# If there is no file in the specified location, we stop the attempt and leave the default values as they are.
+func load_user_settings():
+    var file = File.new()
+    var error = file.open(MOD_DATA_PATH, File.READ)
+    
+    # If we cannot read the file, stop this attempt and leave the respective values at their default.
+    if error != 0:
+        print("[%s] Loading user settings: no global user settings found" % MOD_DISPLAY_NAME)
+        return
+
+    # Loading, parsing, and closing the file.
+    var line = file.get_as_text()
+    var data = JSON.parse(line).result
+    file.close()
+
+    # Writing user settings back where they belong.
+    settings_from_dictionary(data)
+    print("[%s] Loading global user settings: successful" % MOD_DISPLAY_NAME)
+
+
+# Saves the current user settings into the mod data of the map that is being worked on.
+func save_local_settings():
+    var data = settings_into_dictionary()
+    Global.ModMapData[TOOL_ID] = data
+
+
+# Loads the user settings of the current map.
+func load_local_settings():
+    var data = Global.ModMapData[TOOL_ID]
+    if data == null or data.empty():
+        print("[%s] Loading user settings: no user map settings found" % MOD_DISPLAY_NAME)
+        return
+    settings_from_dictionary(data)
+    print("[%s] Loading user map settings: successful" % MOD_DISPLAY_NAME)
+
+
+
+# Writes the current settings into a dictionary.
+func settings_into_dictionary():
     var data = {
         "custom_snap_enabled": custom_snap_enabled,
         "preset_menu_setting": preset_menu_setting,
@@ -584,49 +645,34 @@ func save_user_settings():
         "old_offset_x": old_offset.x,
         "old_offset_y": old_offset.y
     }
-    # Opening/creating of the actual file and writing of the data here.
-    var file = File.new()
-    file.open(MOD_DATA_PATH, File.WRITE)
-    file.store_line(JSON.print(data, "\t"))
-    file.close()
-
-    print("[%s] Saving user settings: successful" % MOD_DISPLAY_NAME)
+    return data
 
 
-# Loads the user settings from the MOD_DATA_PATH
-# If there is no file in the specified location, we stop the attempt and leave the default values as they are.
-func load_user_settings():
-    var file = File.new()
-    var error = file.open(MOD_DATA_PATH, File.READ)
-    
-    # If we cannot read the file, stop this attempt and leave the respective values at their default.
-    if error != 0:
-        print("[%s] Loading user settings: no user settings found" % MOD_DISPLAY_NAME)
-        return
+# Loads the user's settings from a given dictionary.
+# It will try to overwrite the value with the setting corresponding to the key.
+# If the key does not exist, we keep the previous value instead.
+func settings_from_dictionary(data):
+    custom_snap_enabled = data.get("custom_snap_enabled", custom_snap_enabled)
+    preset_menu_setting = data.get("preset_menu_setting", preset_menu_setting)
+    advanced_section_enabled = data.get("advanced_section_enabled", advanced_section_enabled)
+    lock_aspect_offset = data.get("lock_aspect_offset", lock_aspect_offset)
+    lock_aspect_interval = data.get("lock_aspect_interval", lock_aspect_interval)
+    snap_offset.x = data.get("snap_offset_x", snap_offset.x)
+    snap_offset.y = data.get("snap_offset_y", snap_offset.y)
+    old_offset.x = data.get("old_offset_x", old_offset.x)
+    old_offset.y = data.get("old_offset_y", old_offset.y)
+    snap_interval.x = data.get("snap_interval_x", snap_interval.x)
+    snap_interval.y = data.get("snap_interval_y", snap_interval.y)
+    old_interval.x = data.get("old_interval_x", old_interval.x)
+    old_interval.y = data.get("old_interval_y", old_interval.y)
 
-    # Loading, parsing, and closing the file.
-    var line = file.get_as_text()
-    var data = JSON.parse(line).result
-    file.close()
-
-    # Writing user settings back where they belong.
-    custom_snap_enabled = data["custom_snap_enabled"]
-    preset_menu_setting = data["preset_menu_setting"]
-    advanced_section_enabled = data["advanced_section_enabled"]
-    lock_aspect_offset = data["lock_aspect_offset"]
-    lock_aspect_interval = data["lock_aspect_interval"]
-    snap_offset.x = data["snap_offset_x"]
-    snap_offset.y = data["snap_offset_y"]
-    old_offset.x = data["old_offset_x"]
-    old_offset.y = data["old_offset_y"]
-    snap_interval.x = data["snap_interval_x"]
-    snap_interval.y = data["snap_interval_y"]
-    old_interval.x = data["old_interval_x"]
-    old_interval.y = data["old_interval_y"]
-
+    # Since 0 is the index for the custom setting, we'll go into custom mode as that's what we last left with.
+    # We're also overwriting the old interval since that's what we're using to set the sliders.
+    # Might wanna change this to be part of the sliders in the future but as of now there's no reason to go back to a previous custom setting.
     was_custom_mode = preset_menu_setting == 0
-    print("[%s] Loading user settings: successful" % MOD_DISPLAY_NAME)
-
+    if was_custom_mode:
+        old_offset = snap_offset
+        old_interval = snap_interval
 
 
 
@@ -642,8 +688,8 @@ func _on_debug_button():
 #    print_parents(tool_panel)
 #    load_user_settings()
 #    print_levels()
-#    print_methods(Global.Editor.Tools["SelectTool"])
-#    print_properties(Global.WorldUI)
+#    print_methods(Global.Editor.Tools["MapSettings"])
+#    print_properties(Global.Editor.Tools["MapSettings"])
 #    print_signals(Global.Editor.Tools["PathTool"])
 #    Global.World.print_tree_pretty()
 
