@@ -15,6 +15,9 @@ const REWIND_ICON_PATH = "icons/rewind_icon.png"
 const VERTICAL_HEX_ICON_PATH = "icons/hex_icon_vertical.png"
 const HORIZONTAL_HEX_ICON_PATH = "icons/hex_icon_horizontal.png"
 const SQUARE_ICON_PATH = "icons/square_icon.png"
+const ISOMETRIC_ICON_PATH = "icons/isometric_icon.png"
+const EDGE_ICON_PATH = "icons/to_edge_icon.png"
+const CORNER_ICON_PATH = "icons/to_corner_icon.png"
 
 # The path for storing the mod's settings.
 const MOD_DATA_PATH = "user://custom_snap_mod_data.txt"
@@ -281,8 +284,8 @@ func _create_radial_buttons():
     # For some reason, this will always complain that the given property does not exist in ModBaseTool.
     # It's the same as all other CreateX though, so it's perfectly fine.
     var b_group = ButtonGroup.new()
-    tool_panel.CreateSharedToggle ("Corner", "", radial_mode_to_corner, Global.Root + SQUARE_ICON_PATH, b_group)
-    tool_panel.CreateSharedToggle ("Edge", "", not radial_mode_to_corner, Global.Root + HORIZONTAL_HEX_ICON_PATH, b_group)
+    tool_panel.CreateSharedToggle ("Corner", "", radial_mode_to_corner, Global.Root + CORNER_ICON_PATH, b_group)
+    tool_panel.CreateSharedToggle ("Edge", "", not radial_mode_to_corner, Global.Root + EDGE_ICON_PATH, b_group)
     b_group.connect("pressed", self, "_on_radial_mode_changed")
 
     # Closing custom section
