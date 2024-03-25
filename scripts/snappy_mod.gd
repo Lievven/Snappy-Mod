@@ -85,6 +85,9 @@ var active_geometry = GEOMETRY.HEX_H
 var radial_mode_to_corner = true
 var hexagon_radius = 256
 
+
+
+
 # Vanilla start function called by Dungeondraft when the mod is first loaded
 func start():
 
@@ -98,15 +101,13 @@ func start():
     # Begin core section
     tool_panel.BeginSection(false)
 
-    var tg = tool_panel.CreateToggleGroup("ToggleID", ["ID1", "ID2", "ID3"], ["A", "B", "C"], [Global.Root + SQUARE_ICON_PATH, Global.Root + HORIZONTAL_HEX_ICON_PATH, Global.Root + VERTICAL_HEX_ICON_PATH], 0)
-    for toggle in tool_panel.get_child(2).get_children():
-        #toggle.connect("pressed", self, "_on_toggle_mode_changed")
-        print(toggle.text)
-
     # This button will disable custom snapping and return the snapping behaviour to vanilla DD for as long as it is in the off state.
     var on_off_button = tool_panel.CreateCheckButton("Enabled", "", custom_snap_enabled)
     on_off_button.connect("toggled", self, "_toggle_tool_enabled")
     on_off_button.set_tooltip("Disable to return to vanilla snapping mechanics.")
+    
+    # Creates the button panel to switch between Sqare, Hex, etc. modes.
+    _create_mode_buttons()
     
     # The preset menu offers all the most important presets. Most users probably don't need any other settings.
     preset_menu = tool_panel.CreateLabeledDropdownMenu("", "Presets", ["Custom"], "Error")
@@ -203,12 +204,53 @@ func start():
     print("[%s] UI Layout: successful" % MOD_DISPLAY_NAME)
 
 
-# TODO: Totally useless.
-func _on_toggle_mode_changed(something = null):
-    print("Change", something)
+## Creates the buttons to switch between the different grid modes, e.g. Square, Hex_V, or Hex_H
+func _create_mode_buttons():
+    # Here we are creating a custom horizontal section, as those are not yet supported by DD.
+    # It's as easy as adding a new container and assigning it as 'Align', which is where DD puts any newly created items.
+    # VERY IMPORTANT: we need to close the container afterwards, or DD will put everything else in there as well.
+    var mode_container = HBoxContainer.new()
+    var section_container = tool_panel.Align
+    section_container.add_child(mode_container)
+    tool_panel.Align = mode_container
+
+    # Creating a grouped toggle, meaning turning on one of them will turn off all others.
+    # For some reason, this will always complain that the given property does not exist in ModBaseTool.
+    # It's the same as all other CreateX though, so it's perfectly fine.
+    # DON'T MESS WITH THE ORDER WITHOUT ALSO CHANGING THE ORDER OF ASSIGNING IDENTIFIERS BELOW
+    var b_group = ButtonGroup.new()
+    tool_panel.CreateSharedToggle ("", "", active_geometry == GEOMETRY.SQUARE, Global.Root + SQUARE_ICON_PATH, b_group)
+    tool_panel.CreateSharedToggle ("", "", active_geometry == GEOMETRY.HEX_H, Global.Root + HORIZONTAL_HEX_ICON_PATH, b_group)
+    tool_panel.CreateSharedToggle ("", "", active_geometry == GEOMETRY.HEX_V, Global.Root + VERTICAL_HEX_ICON_PATH, b_group)
+    b_group.connect("pressed", self, "_on_toggle_mode_changed")
+
+    # Assigning the proper identifiers to the button.
+    # Note that we don't get the button returned from the CreateSharedToggle function, so we have to go by order here.
+    # DON'T GET THE ORDER WRONG.
+    mode_container.get_child(0).name = GEOMETRY.SQUARE
+    mode_container.get_child(1).name = GEOMETRY.HEX_H
+    mode_container.get_child(2).name = GEOMETRY.HEX_V
+
+    # Closing custom section
+    # Easily done by replacing 'Align' with the container previously held by it.
+    tool_panel.Align = section_container
 
 
-# Changes the currently selected preset.
+
+
+## Changes the grid mode. The button's 'name' property needs to equal the new grid mode.
+func _on_toggle_mode_changed(something):
+    # Gotta cast to int here as while we're using the GEOMETRY enum to set the button's name, that's a string, which won't match for int.
+    match int(something.name):
+        GEOMETRY.SQUARE:
+            active_geometry = GEOMETRY.SQUARE
+        GEOMETRY.HEX_H:
+            active_geometry = GEOMETRY.HEX_H
+        GEOMETRY.HEX_V:
+            active_geometry = GEOMETRY.HEX_V
+
+
+## Changes the currently selected preset.
 func _change_preset(preset_index):
     preset_menu_setting = preset_index
     # If custom mode was selected, load the old custom mode settings and save the new settings.
@@ -226,8 +268,8 @@ func _change_preset(preset_index):
 
 
 
-# Makes sure that we are set into custom mode.
-# If we were not set into custom mode, loads all the necessary data from our last custom mode edits.
+## Makes sure that we are set into custom mode.
+## If we were not set into custom mode, loads all the necessary data from our last custom mode edits.
 func _set_to_custom_mode():
     # If we were already in custom mode, we don't need to do anything.
     if was_custom_mode:
@@ -809,14 +851,14 @@ func settings_from_dictionary(data):
 # Debug function, very important. Prints whatever stuff I need to know at the moment.
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
-    hexagon_radius = fmod(hexagon_radius + 64, 256)
-    print(hexagon_radius)
+#    hexagon_radius = fmod(hexagon_radius + 64, 256)
+#    print(hexagon_radius)
 #    print_children(tool_panel)
 #    print_parents(tool_panel)
 #    load_user_settings()
 #    print_levels()
 #    print_methods(Global.Editor.Tools["MapSettings"])
-#    print_properties()
+    print_properties(tool_panel)
 #    print_signals(Global.Editor.Tools["PathTool"])
 #    Global.World.print_tree_pretty()
 
