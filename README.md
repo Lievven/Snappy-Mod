@@ -8,6 +8,8 @@ For all those who need finer control over where to snap to in Dungeondraft.
 3. If you do not have a mod folder yet, the Mods tab will let you choose one.
 4. Use the mods tab to select the mod and simply open your map.
 
+If you have a previous version installed, simply delete or replace the old mod files.
+
 
 ### How to use.
 - You can find the menu to interact with this mod in the Settings category.
@@ -18,6 +20,9 @@ For all those who need finer control over where to snap to in Dungeondraft.
 
 
 ### FAQ.
+Q. Can I snap for hexagonal maps? \
+A. Absolutely! Simply check out one of the respective presets, or click one of the hexagonal icons in the mod's tool.
+
 Q. Does the mod save my settings? \
 A. Yes. You can find the file with the settings by navigating 'Menu' -> 'Open User Folder' and there look for 'custom_snap_mod_data.txt' Note that this file only shows up after you edit your setting for the first time.
 
@@ -34,7 +39,7 @@ Q. Offset tool? Where can I find that? \
 A. Enable the advanced section of the tool.
 
 Q. I was hoping I could set my own distance for the snapping points. \
-A. You can! Simply enable the advanced section of the tool.
+A. You can! Simply enable the advanced section of the tool and play around with the Spacing sliders.
 
 Q. Why is there 2 sliders for spacing and offset each? \
 A. If you turn off the locked aspect ratio, you can set a separate spacing and offset for each axis. Useful for isometric maps.

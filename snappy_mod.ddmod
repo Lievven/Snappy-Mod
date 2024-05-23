@@ -1,7 +1,7 @@
 {
 	"name": "Custom Snap Mod",
 	"unique_id": "Lievven.Snappy_Mod",
-	"version": "1.1.1",
+	"version": "1.1.2",
 	"author": "Lievven",
 	"description": "Allows you to modify and offset the grid snap functionality. Now with hexagons.",
 	"dd_version": "1.1.0.6"

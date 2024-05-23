@@ -1,8 +1,8 @@
-⬢ Fix bug with coordinate display when using polygon tools.
+		⬢ Fix bug with coordinate display when using polygon tools. [DONE]
 
 		⬢ Change Presets to dict. [DONE]
 
-	⬢ Use ModMapData for per-map saves. [Implemented, Untested]
+		⬢ Use ModMapData for per-map saves. [DONE]
 
 ⬢ Integrate with _Lib.
 
@@ -16,4 +16,4 @@
 
 ⬢ Implement custom grid overlay.
 
-⬢ ???
+		⬢ HEXAGONS!!! [DONE]

@@ -21,8 +21,6 @@ const CORNER_ICON_PATH = "icons/to_corner_icon.png"
 
 # The path for storing the mod's settings.
 const MOD_DATA_PATH = "user://custom_snap_mod_data.txt"
-# Path for storing the default prefabs file.
-const PRESETS_FILE_PATH = "presets.json"
 
 # The amount of time we wait before saving when modifying a setting, in case there's other modifications coming in.
 const SAVE_DELAY = 0.25
