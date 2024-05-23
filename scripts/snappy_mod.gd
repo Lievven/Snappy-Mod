@@ -1,7 +1,7 @@
 var script_class = "tool"
 
 # Set to true to show debug buttons
-const DEBUG_MODE = true
+const DEBUG_MODE = false
 
 # Tool parameters
 const TOOL_CATEGORY = "Settings"
