@@ -80,6 +80,8 @@ var snap_offset = Vector2(0, 0)
 # The space inbetween the invisible lines we snap to.
 var snap_interval = Vector2(32, 32)
 
+# The origin of any snap boxes. If null, there currently is no active snap box.
+var box_origin = null
 
 # The current preset for the preset menu.
 var preset_menu_setting = 0
@@ -163,6 +165,28 @@ var preset_options = [
         "snap_offset_y": 0,
         "snap_interval_x": 64,
         "snap_interval_y": 64,
+    },
+    {
+        "preset_name": "Roll20 Horizontal",
+        "radial_mode_to_corner": false,
+        "active_geometry": GEOMETRY.HEX_H,
+        "lock_aspect_offset": true,
+        "lock_aspect_interval": true,
+        "snap_offset_x": 0,
+        "snap_offset_y": 0,
+        "snap_interval_x": 150,
+        "snap_interval_y": 150,
+    },
+    {
+        "preset_name": "Roll20 Vertical",
+        "radial_mode_to_corner": false,
+        "active_geometry": GEOMETRY.HEX_V,
+        "lock_aspect_offset": true,
+        "lock_aspect_interval": true,
+        "snap_offset_x": 0,
+        "snap_offset_y": 0,
+        "snap_interval_x": 150,
+        "snap_interval_y": 150,
     },
     ]
 
@@ -824,31 +848,31 @@ func _update_selection_box(snap):
     var box = Global.WorldUI.GetSelectionBox()
     # Return if the selection box is at the world origin, as the tool is inactive.
     if box.position.x == 0 and box.position.y == 0 and box.size.x == 0 and box.size.y == 0:
+        # Set origin box to null to signal our next use case that it's starting a new box.
+        box_origin = null
         return
-    
-    # Dungeondraft is a bit convoluted here as it doesn't seem to save the original position of the box.
-    # Instead, to "invert" the box when the box extends towards the negative directions, it simply swaps the position and end values.
-    # That's bad for us, because we modify them yet we don't know which one is the origin.
-    # Hacky solution: we find where vanilla DD would snap the box to.
-    var vanilla_snap = Global.WorldUI.GetSnappedPosition(Global.WorldUI.MousePosition)
 
-    # If the current X coordinate of the box is where vanilla DD would snap to, we adjust it while preserving the origin (in this case end.x) of the box.
-    if box.position.x == vanilla_snap.x:
-        var end = box.end.x
-        box.position.x = snap.x
-        box.end.x = end
-    # Otherwise we can simply write our value into the end, as the origin (in this case position.x) is already preserved
-    else:
+    # Dungeondraft doesn't expose the origin position of the box to us, so we need to save it manually to create the correctly snapped outline.
+    if box_origin == null:
+        box_origin = get_snapped_position(Global.WorldUI.MousePosition)
+        
+    # In Godot, Rects always go left to right, top to bottom without negative values.
+    # Hence we check which one of our corner coordinates is the leftmost coordinate.
+    # Then simply assign that one for the box's start position and the other for the end position
+    if box_origin.x < snap.x:
+        box.position.x = box_origin.x
         box.end.x = snap.x
-
-    # If the current Y coordinate of the box is where vanilla DD would snap to, we adjust it while preserving the origin (in this case end.y) of the box.
-    if box.position.y == vanilla_snap.y:
-        var end = box.end.y
-        box.position.y = snap.y
-        box.end.y = end
-    # Otherwise we can simply write our value into the end, as the origin (in this case position.y) is already preserved
     else:
+        box.position.x = snap.x
+        box.end.x = box_origin.x
+
+    # Same as before, but with Y coordinates selecting for the topmost coordinate
+    if box_origin.y < snap.y:
+        box.position.y = box_origin.y
         box.end.y = snap.y
+    else:
+        box.position.y = snap.y
+        box.end.y = box_origin.y
 
     # We still need to set the box again, as we only created a clone earlier.
     Global.WorldUI.SetSelectionBox(box)
@@ -873,6 +897,8 @@ func _update_portals(snap):
     #Global.WorldUI.Texture.Transform = portal_location
     if Global.Editor.Tools["PortalTool"].Freestanding:
         Global.WorldUI.Texture.Transform.origin = snap
+
+
 
 
 ## Saves the user settings as JSON in the MOD_DATA_PATH
