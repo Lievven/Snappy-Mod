@@ -47,6 +47,9 @@ A. If you turn off the locked aspect ratio, you can set a separate spacing and o
 Q. What are the 'Lock Aspect Ratio' toggles doing? \
 A. Turning them off lets you use the sliders for each axis separately (see the point above). This behaviour is turned off by default so you don't have to change 2 values every time.
 
+Q. What are the 'Corner' and 'Edge' buttons at the bottom of the advanced setting doing? \
+A. Hexagons' sizes are measured differently by different artists and tools. Sometimes they're measured from the corners, which are the furthest points from the center. And at other times they're measured from the middle of the edges, which are the closest points to the center. Using these buttons you can switch between these settings.
+
 Q. Nothing is snapping anymore. \
 A. Have you accidentally disabled the mod or turned off snapping altogether? Try pressing 'S'. Or maybe you're just using a very fine snapping resolution. Try lowering the spacing.
 
