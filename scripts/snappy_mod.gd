@@ -333,14 +333,14 @@ func _create_preset_menu():
 ## Creates the sliders and buttons for adjusting the snap interval
 func _create_interval_sliders():
     # Creating label and slider to adjust the snap interval in the X axis.
-    tool_panel.CreateLabel("Horizontal Spacing")
+    tool_panel.CreateLabel("Horizontal Scaling")
     interval_slider_x = tool_panel.CreateSlider("", 32, 1, 256, 1, false)
     interval_slider_x.set_allow_greater(true)
     interval_slider_x.set_value(snap_interval.x)
     interval_slider_x.connect("value_changed", self, "_changed_interval_x")
 
     # Creating label and slider to adjust the snap interval in the Y axis.
-    tool_panel.CreateLabel("Vertical Spacing")
+    tool_panel.CreateLabel("Vertical Scaling")
     interval_slider_y = tool_panel.CreateSlider("", 32, 1, 256, 1, false)
     interval_slider_y.set_allow_greater(true)
     interval_slider_y.set_value(snap_interval.y)

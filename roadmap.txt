@@ -17,3 +17,8 @@
 ⬢ Implement custom grid overlay.
 
 		⬢ HEXAGONS!!! [DONE]
+		⬢ Rename Spacing to Scaling [Done]
+⬢ Tooltip for Scaling/Offset being Pixels
+
+⬢ Mirror Tool
+⬢ Snap selected asset to grid
