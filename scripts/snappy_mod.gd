@@ -50,6 +50,8 @@ var preset_menu
 
 
 # ==== MOD STATE ====
+var previous_zoom
+
 
 # A timer to put a slight delay between changing the sliders and saving so we don't save a million times.
 var save_timer = SAVE_DELAY
@@ -623,6 +625,9 @@ func update(delta):
     # Snaps the Building, Pattern, Water, Path, etc. polygons to the Snappy Grid.
     _update_selection_box(snap)
 
+    # Updates the displayed grid to match the snap points
+    #_draw_grid_mesh()
+
 
 
 ## Calculate the closest position snapped to our invisible Snappy Grid from the given Vector2.
@@ -1022,8 +1027,93 @@ func preset_from_dictionary(data):
     snap_interval.y = data.get("snap_interval_y", snap_interval.y)
 
 
+
+func _draw_grid_mesh():
+    if previous_zoom == Global.Camera.zoom:
+        return
+
+    previous_zoom = Global.Camera.zoom
+    match active_geometry:
+        GEOMETRY.HEX_V:
+            _draw_vertical_hexagon_mesh()
+        GEOMETRY.HEX_H:
+            _draw_horizontal_hexagon_mesh()
+        _:
+            print("[%s] Drawing grid mesh: wrong active geometry" % MOD_DISPLAY_NAME)
+
+
+#
+func _draw_vertical_hexagon_mesh():
+    # Retrieving mesh and cleaning vanilla DD grid.
+    var mesh = Global.World.get_child("GridMesh").get_mesh()
+    mesh.clear_surfaces()
+
+    var size = get_hexagon_size()
+
+    # We tile caltrop shapes to form a hexagon grid. Three spikes per hexagon. These are the ends of the spikes relative to the middle vertex.
+    var offset_e = Vector2(sqrt(3), 0) * size
+    var offset_sw = Vector2(-sqrt(3) * 0.5, 1.5) * size
+    var offset_nw = Vector2(-sqrt(3) * 0.5, -1.5) * size
+
+    # The shape we use for tilings means we only gotta place it every second Hexagon in one direction, and twice per  hexagon in the other.
+    var rows = Global.World.Dimensions.y * 2 + 1
+    var columns = Global.World.Dimensions.x / 2 + 1
+
+    # Since hexagons don't tile in a square, use a parallelogram shape.
+    for r in range(rows):
+        for q in range(-r/2, columns - r/2):
+            # Calculate the base vector for each spike.
+            # Vertical arrangement only requires one caltrop every 3 hexagons
+            # Horizontal arrangement on the other one one every hexagon
+            var vec_x = sqrt(3) * q * 3 + sqrt(3) * 1.5 * r
+            var vec_y = 1.5 * r
+            # Move the base vector based on the grid interval and offset.
+            var hex_origin = Vector2(vec_x, vec_y) * size + snap_offset
+            
+            # Apply the offsets and add the lines to the mesh.
+            _add_grid_mesh_surface(hex_origin, hex_origin + offset_e)
+            _add_grid_mesh_surface(hex_origin, hex_origin + offset_sw)
+            _add_grid_mesh_surface(hex_origin, hex_origin + offset_nw)
+
+
+# TODO: Implement
+func _draw_horizontal_hexagon_mesh():
+    # Retrieving mesh and cleaning vanilla DD grid.
+    var mesh = Global.World.get_child("GridMesh").get_mesh()
+    mesh.clear_surfaces()
+
+    var size = get_hexagon_size()
+
+    # We tile caltrop shapes to form a hexagon grid. Three spikes per hexagon. These are the ends of the spikes relative to the middle vertex.
+    var offset_s = Vector2(0, sqrt(3)) * size
+    var offset_ne = Vector2(1.5, - sqrt(3) * 0.5) * size
+    var offset_nw = Vector2(-1.5, -sqrt(3) * 0.5) * size
+
+    # The shape we use for tilings means we only gotta place it every second Hexagon in one direction, and twice per  hexagon in the other.
+    var rows = Global.World.Dimensions.y / 2 + 1
+    var columns = Global.World.Dimensions.x * 2 + 1
+
+    # Since hexagons don't tile in a square, use a parallelogram shape.
+    for q in range(columns):
+        for r in range(-q/2, rows - q/2):
+            # Calculate the base vector for each spike.
+            # Horizontal arrangement only requires one caltrop every 3 hexagons
+            # Vertical arrangement on the other one one every hexagon
+            var vec_x = 1.5 * q
+            var vec_y = sqrt(3) * 1.5 * q + sqrt(3) * 3 * r
+            # Move the base vector based on the grid interval and offset.
+            var hex_origin = Vector2(vec_x, vec_y) * size + snap_offset
+            
+            # Apply the offsets and add the lines to the mesh.
+            _add_grid_mesh_surface(hex_origin, hex_origin + offset_s)
+            _add_grid_mesh_surface(hex_origin, hex_origin + offset_ne)
+            _add_grid_mesh_surface(hex_origin, hex_origin + offset_nw)
+
+
+
+
 # Adds a surface to the grid mesh, which is visible as a grid line to the player.
-func _add_grid_mesh_surface(point_a: Vector3, point_b: Vector3):
+func _add_grid_mesh_surface(point_a, point_b):
     # This mesh stores a surface for each line. Simply add a surface, and we'll have a line there.
     var mesh = Global.World.get_child("GridMesh").get_mesh() 
 
@@ -1037,22 +1127,25 @@ func _add_grid_mesh_surface(point_a: Vector3, point_b: Vector3):
 
     # The current zoom scale. Note that a zoom of 1.0 is not necessarily displayed as 100% in DD.
     # A higher value means the camera is zoomed out and sees a larger part of the canvas.
+    # Since the DD vanilla grid works with clamped values, so will we.
     var zoom_scale = max(Global.Camera.zoom.x, 2.0)
     
-    # Calculating the normalized perpendicular to the line, which is used to give it width
+    # Calculating the normalized perpendicular to the line, which is needed to give the surface width
     var diff = point_b - point_a
-    var perpendicular = Vector3(-diff.y, diff.x, 0).normalized() * zoom_scale * 2
-    var line_length = diff.length() / 4 / zoom_scale
+    var perpendicular = Vector3(-diff.y, diff.x, 0).normalized()
+    perpendicular *= zoom_scale * 2
+    # The UV length is used to scale the amount of the texture used to not be distorted.
+    var uv_length = diff.length() / (zoom_scale * 4)
 
-    verts.append(point_a + perpendicular)
-    verts.append(point_a - perpendicular)
-    verts.append(point_b + perpendicular)
-    verts.append(point_b - perpendicular)
+    verts.append(Vector3(point_a.x, point_a.y, 0) + perpendicular)
+    verts.append(Vector3(point_a.x, point_a.y, 0) - perpendicular)
+    verts.append(Vector3(point_b.x, point_b.y, 0) + perpendicular)
+    verts.append(Vector3(point_b.x, point_b.y, 0) - perpendicular)
     
     # Gotta paint each vertex black. Don't ask me why, but it's the same with vanilla DD, regardless the set colour.
     var colours = PoolColorArray()
     for i in range(verts.size()):
-        colours.append(Color.black)
+        colours.append(Color.white)
 
     # This array gives each vertex a corresponding pixel in the source texture.
     # From there the shader computes which pixel of the surface corresponds to which pixel in the texture.
@@ -1061,8 +1154,8 @@ func _add_grid_mesh_surface(point_a: Vector3, point_b: Vector3):
     var uvs = PoolVector2Array()
     uvs.append(Vector2(0, 0))
     uvs.append(Vector2(0, 1))
-    uvs.append(Vector2(line_length, 0))
-    uvs.append(Vector2(line_length, 1))
+    uvs.append(Vector2(uv_length, 0))
+    uvs.append(Vector2(uv_length, 1))
 
     # Assign arrays to mesh array.
     surface_array[Mesh.ARRAY_VERTEX] = verts
@@ -1092,21 +1185,8 @@ func _create_debug_section():
 ## Debug function, very important. Prints whatever stuff I need to know at the moment.
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
-    var mesh = Global.World.get_child("GridMesh").get_mesh() # the mesh for the grid visuals.
 
- #   for i in range(mesh.get_surface_count()):
- #       print(mesh.surface_get_arrays(i))
-
-    print(mesh.surface_get_arrays(0))
-    print(Global.Camera.zoom.x)
-
-#    mesh.surface_remove(3)
-    _add_grid_mesh_surface(Vector3(128, 128, 0), Vector3(2048, 2048, 0))
-    _add_grid_mesh_surface(Vector3(128, 128, 0), Vector3(1024, 2048, 0))
-    _add_grid_mesh_surface(Vector3(128, 128, 0), Vector3(2048, 1024, 0))
-    _add_grid_mesh_surface(Vector3(128, 0, 0), Vector3(128, 2048, 0))
-    _add_grid_mesh_surface(Vector3(0, 128, 0), Vector3(2048, 128, 0))
-
+    _draw_grid_mesh()
 
 #    hexagon_radius = fmod(hexagon_radius + 64, 256)
 #    print(hexagon_radius)
