@@ -1,7 +1,7 @@
 var script_class = "tool"
 
 # Set to true to show debug buttons
-const DEBUG_MODE = false
+const DEBUG_MODE = true
 
 # Tool parameters
 const TOOL_CATEGORY = "Settings"
@@ -1022,6 +1022,54 @@ func preset_from_dictionary(data):
     snap_interval.y = data.get("snap_interval_y", snap_interval.y)
 
 
+# Adds a surface to the grid mesh, which is visible as a grid line to the player.
+func _add_grid_mesh_surface(point_a: Vector3, point_b: Vector3):
+    # This mesh stores a surface for each line. Simply add a surface, and we'll have a line there.
+    var mesh = Global.World.get_child("GridMesh").get_mesh() 
+
+
+    # The surface to be created takes all its parameters in the shape of an array. Many of these parameters are arrays themselves.
+    var surface_array= []
+    surface_array.resize(Mesh.ARRAY_MAX)
+
+    # This is the array of all the vertices shaping the surface.
+    var verts = PoolVector3Array()
+
+    # The current zoom scale. Note that a zoom of 1.0 is not necessarily displayed as 100% in DD.
+    # A higher value means the camera is zoomed out and sees a larger part of the canvas.
+    var zoom_scale = max(Global.Camera.zoom.x, 2.0)
+    
+    # Calculating the normalized perpendicular to the line, which is used to give it width
+    var diff = point_b - point_a
+    var perpendicular = Vector3(-diff.y, diff.x, 0).normalized() * zoom_scale * 2
+    var line_length = diff.length() / 4 / zoom_scale
+
+    verts.append(point_a + perpendicular)
+    verts.append(point_a - perpendicular)
+    verts.append(point_b + perpendicular)
+    verts.append(point_b - perpendicular)
+    
+    # Gotta paint each vertex black. Don't ask me why, but it's the same with vanilla DD, regardless the set colour.
+    var colours = PoolColorArray()
+    for i in range(verts.size()):
+        colours.append(Color.black)
+
+    # This array gives each vertex a corresponding pixel in the source texture.
+    # From there the shader computes which pixel of the surface corresponds to which pixel in the texture.
+    # The UV is [(0, 0), (0, 1), (16 * length, 0), (16*length, 1)]
+    # Where length is the length of the line being drawn in DD tiles
+    var uvs = PoolVector2Array()
+    uvs.append(Vector2(0, 0))
+    uvs.append(Vector2(0, 1))
+    uvs.append(Vector2(line_length, 0))
+    uvs.append(Vector2(line_length, 1))
+
+    # Assign arrays to mesh array.
+    surface_array[Mesh.ARRAY_VERTEX] = verts
+    surface_array[Mesh.ARRAY_TEX_UV] = uvs
+    surface_array[Mesh.ARRAY_COLOR] = colours
+
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLE_STRIP, surface_array)
 
 
 # =========================================================
@@ -1044,6 +1092,22 @@ func _create_debug_section():
 ## Debug function, very important. Prints whatever stuff I need to know at the moment.
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
+    var mesh = Global.World.get_child("GridMesh").get_mesh() # the mesh for the grid visuals.
+
+ #   for i in range(mesh.get_surface_count()):
+ #       print(mesh.surface_get_arrays(i))
+
+    print(mesh.surface_get_arrays(0))
+    print(Global.Camera.zoom.x)
+
+#    mesh.surface_remove(3)
+    _add_grid_mesh_surface(Vector3(128, 128, 0), Vector3(2048, 2048, 0))
+    _add_grid_mesh_surface(Vector3(128, 128, 0), Vector3(1024, 2048, 0))
+    _add_grid_mesh_surface(Vector3(128, 128, 0), Vector3(2048, 1024, 0))
+    _add_grid_mesh_surface(Vector3(128, 0, 0), Vector3(128, 2048, 0))
+    _add_grid_mesh_surface(Vector3(0, 128, 0), Vector3(2048, 128, 0))
+
+
 #    hexagon_radius = fmod(hexagon_radius + 64, 256)
 #    print(hexagon_radius)
 #    print_children(tool_panel)
