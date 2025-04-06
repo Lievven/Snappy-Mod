@@ -86,6 +86,13 @@ var box_origin = null
 # The current preset for the preset menu.
 var preset_menu_setting = 0
 
+# Poolvectorarrays for drawing the hex mesh.
+# Verts is the 3d position of the mesh's triangle corners.
+# Uvs is the equivalent uv position mapping the pixel of the texture to the corresponding pixel in the mesh.
+# Needs to be up here because GD3.4 can't pass these by reference.
+var verts
+var uvs
+
 # An array of dictionaries of all the preset options.
 # The first element is always the most recently used custom settings.
 var preset_options = [
@@ -626,7 +633,7 @@ func update(delta):
     _update_selection_box(snap)
 
     # Updates the displayed grid to match the snap points
-    #_draw_grid_mesh()
+    _draw_grid_mesh()
 
 
 
@@ -1028,25 +1035,64 @@ func preset_from_dictionary(data):
 
 
 
+# Helper function to call the appropriate function to calculate the mesh based on the active geometry.
 func _draw_grid_mesh():
+    # Currently we only update if zoom changed
+    # TODO: also upgrade if we changed snap settings.
     if previous_zoom == Global.Camera.zoom:
         return
 
     previous_zoom = Global.Camera.zoom
+
+    # Initialising subarrays of the surface array.
+    verts = PoolVector3Array()
+    uvs = PoolVector2Array()
+
+    # Select the grid to calculate based on the active geometry.
     match active_geometry:
         GEOMETRY.HEX_V:
-            _draw_vertical_hexagon_mesh()
+            _draw_vertical_surface_mesh()
         GEOMETRY.HEX_H:
-            _draw_horizontal_hexagon_mesh()
+            _draw_horizontal_surface_mesh()
+        GEOMETRY.SQUARE:
+            _draw_square_surface_mesh()
         _:
             print("[%s] Drawing grid mesh: wrong active geometry" % MOD_DISPLAY_NAME)
+            return
+    
+    # Actually add the calculated grid to the mesh.
+    _add_surface_array_to_mesh()
 
 
-#
-func _draw_vertical_hexagon_mesh():
-    # Retrieving mesh and cleaning vanilla DD grid.
-    var mesh = Global.World.get_child("GridMesh").get_mesh()
-    mesh.clear_surfaces()
+# Calculates the vertices and UVs for a square grid.
+# Both rendering and calculation are fast since it operates in O(n)
+# TODO: Currently, an offset larger than the snap interval will result in missing lines.
+func _draw_square_surface_mesh():
+    # Map size needed to calculate mesh from 0 to the end of the map.
+    var map_size = Global.World.WoxelDimensions
+
+    # Calculating mesh surfaces for vertical lines. Simply loop till we're off the map.
+    var line_x = snap_offset.x
+    while line_x <= map_size.x:
+        var vertical_a = Vector2(line_x, 0)
+        var vertical_b = Vector2(line_x, map_size.y)
+        _add_grid_mesh_triangles(vertical_a, vertical_b)
+        line_x += snap_interval.x
+
+    # Calculating mesh surfaces for horizontal lines. Simply loop till we're off the map.
+    var line_y = snap_offset.y
+    while line_y <= map_size.y:
+        var horizontal_a = Vector2(0, line_y)
+        var horizontal_b = Vector2(map_size.x, line_y)
+        _add_grid_mesh_triangles(horizontal_a, horizontal_b)
+        line_y += snap_interval.y
+
+
+# Calculates the vertices and UVs for a hexagonal grid in vertical orientation.
+# While rendering is fast, the calculation is rather slow as it operates in O(n²)
+# Rendering more than 30x30 hexes quickly causes a second or more in delay.
+# Calling this as rarely as possible is advised.
+func _draw_vertical_surface_mesh():
 
     var size = get_hexagon_size()
 
@@ -1056,8 +1102,8 @@ func _draw_vertical_hexagon_mesh():
     var offset_nw = Vector2(-sqrt(3) * 0.5, -1.5) * size
 
     # The shape we use for tilings means we only gotta place it every second Hexagon in one direction, and twice per  hexagon in the other.
-    var rows = Global.World.Dimensions.y * 2 + 1
-    var columns = Global.World.Dimensions.x / 2 + 1
+    var rows = Global.World.WoxelDimensions.y / size.y * 2 + 1
+    var columns = Global.World.WoxelDimensions.x / size.x / 2 + 1
 
     # Since hexagons don't tile in a square, use a parallelogram shape.
     for r in range(rows):
@@ -1071,16 +1117,16 @@ func _draw_vertical_hexagon_mesh():
             var hex_origin = Vector2(vec_x, vec_y) * size + snap_offset
             
             # Apply the offsets and add the lines to the mesh.
-            _add_grid_mesh_surface(hex_origin, hex_origin + offset_e)
-            _add_grid_mesh_surface(hex_origin, hex_origin + offset_sw)
-            _add_grid_mesh_surface(hex_origin, hex_origin + offset_nw)
+            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_e)
+            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_sw)
+            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_nw)
 
 
-# TODO: Implement
-func _draw_horizontal_hexagon_mesh():
-    # Retrieving mesh and cleaning vanilla DD grid.
-    var mesh = Global.World.get_child("GridMesh").get_mesh()
-    mesh.clear_surfaces()
+# Calculates the vertices and UVs for a hexagonal grid in horizontal orientation.
+# While rendering is fast, the calculation is rather slow.
+# Rendering more than 30x30 hexes quickly causes a second or more in delay.
+# Calling this as rarely as possible is advised.
+func _draw_horizontal_surface_mesh():
 
     var size = get_hexagon_size()
 
@@ -1090,8 +1136,8 @@ func _draw_horizontal_hexagon_mesh():
     var offset_nw = Vector2(-1.5, -sqrt(3) * 0.5) * size
 
     # The shape we use for tilings means we only gotta place it every second Hexagon in one direction, and twice per  hexagon in the other.
-    var rows = Global.World.Dimensions.y / 2 + 1
-    var columns = Global.World.Dimensions.x * 2 + 1
+    var rows = Global.World.WoxelDimensions.y / size.y / 2 + 1
+    var columns = Global.World.WoxelDimensions.x / size.x * 2 + 1
 
     # Since hexagons don't tile in a square, use a parallelogram shape.
     for q in range(columns):
@@ -1103,28 +1149,44 @@ func _draw_horizontal_hexagon_mesh():
             var vec_y = sqrt(3) * 1.5 * q + sqrt(3) * 3 * r
             # Move the base vector based on the grid interval and offset.
             var hex_origin = Vector2(vec_x, vec_y) * size + snap_offset
-            
+
             # Apply the offsets and add the lines to the mesh.
-            _add_grid_mesh_surface(hex_origin, hex_origin + offset_s)
-            _add_grid_mesh_surface(hex_origin, hex_origin + offset_ne)
-            _add_grid_mesh_surface(hex_origin, hex_origin + offset_nw)
+            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_s)
+            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_ne)
+            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_nw)
 
 
+# Adds the subarrays to the surface array and then to the mesh for rendering.
+# TODO: We might be able to store the meshes for immediate rendering.
+#       As it stands, generating large amounts of hexagons takes a couple seconds.
+func _add_surface_array_to_mesh():
+    # Retrieving mesh and cleaning vanilla DD grid.
+    var mesh = Global.World.get_child("GridMesh").get_mesh()
+    mesh.clear_surfaces()
 
-
-# Adds a surface to the grid mesh, which is visible as a grid line to the player.
-func _add_grid_mesh_surface(point_a, point_b):
-    # This mesh stores a surface for each line. Simply add a surface, and we'll have a line there.
-    var mesh = Global.World.get_child("GridMesh").get_mesh() 
-
-
-    # The surface to be created takes all its parameters in the shape of an array. Many of these parameters are arrays themselves.
-    var surface_array= []
+    # Initialising the surface array.
+    var surface_array = []
     surface_array.resize(Mesh.ARRAY_MAX)
 
-    # This is the array of all the vertices shaping the surface.
-    var verts = PoolVector3Array()
+    # Gotta paint each vertex white. DD just tints the thing in a shader or the texture.
+    var colours = PoolColorArray()
+    for i in range(verts.size()):
+        colours.append(Color.white)
 
+    # Insert the subarrays into the surface array.
+    surface_array[Mesh.ARRAY_VERTEX] = verts
+    surface_array[Mesh.ARRAY_TEX_UV] = uvs
+    surface_array[Mesh.ARRAY_COLOR] = colours
+    
+    # Adds the surface to the mesh.
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_array)
+
+
+# Appends the necessary values to the surface sub-arrays to render a line from @point_a to @point_b.
+# Only creates the necessary arrays, which must then still be added to the surface array and subsequently the mesh.
+# Points can be Vector2 or Vector3
+func _add_grid_mesh_triangles(point_a, point_b):
+    
     # The current zoom scale. Note that a zoom of 1.0 is not necessarily displayed as 100% in DD.
     # A higher value means the camera is zoomed out and sees a larger part of the canvas.
     # Since the DD vanilla grid works with clamped values, so will we.
@@ -1137,32 +1199,42 @@ func _add_grid_mesh_surface(point_a, point_b):
     # The UV length is used to scale the amount of the texture used to not be distorted.
     var uv_length = diff.length() / (zoom_scale * 4)
 
-    verts.append(Vector3(point_a.x, point_a.y, 0) + perpendicular)
-    verts.append(Vector3(point_a.x, point_a.y, 0) - perpendicular)
-    verts.append(Vector3(point_b.x, point_b.y, 0) + perpendicular)
-    verts.append(Vector3(point_b.x, point_b.y, 0) - perpendicular)
-    
-    # Gotta paint each vertex black. Don't ask me why, but it's the same with vanilla DD, regardless the set colour.
-    var colours = PoolColorArray()
-    for i in range(verts.size()):
-        colours.append(Color.white)
+    # Calculating the four corner points of the line
+    var corner_1 = Vector3(point_a.x, point_a.y, 0) + perpendicular
+    var corner_2 = Vector3(point_a.x, point_a.y, 0) - perpendicular
+    var corner_3 = Vector3(point_b.x, point_b.y, 0) + perpendicular
+    var corner_4 = Vector3(point_b.x, point_b.y, 0) - perpendicular
 
+    # The first triangle half of the square creating the line
+    verts.append(corner_1)
+    verts.append(corner_2)
+    verts.append(corner_3)
+    
+    # The second triangle half of the square creating the line
+    verts.append(corner_3)
+    verts.append(corner_4)
+    verts.append(corner_2)
+    
     # This array gives each vertex a corresponding pixel in the source texture.
     # From there the shader computes which pixel of the surface corresponds to which pixel in the texture.
     # The UV is [(0, 0), (0, 1), (16 * length, 0), (16*length, 1)]
     # Where length is the length of the line being drawn in DD tiles
-    var uvs = PoolVector2Array()
-    uvs.append(Vector2(0, 0))
-    uvs.append(Vector2(0, 1))
-    uvs.append(Vector2(uv_length, 0))
-    uvs.append(Vector2(uv_length, 1))
+    var uv_1 = Vector2(0, 0)
+    var uv_2 = Vector2(0, 1)
+    var uv_3 = Vector2(uv_length, 0)
+    var uv_4 = Vector2(uv_length, 1)
 
-    # Assign arrays to mesh array.
-    surface_array[Mesh.ARRAY_VERTEX] = verts
-    surface_array[Mesh.ARRAY_TEX_UV] = uvs
-    surface_array[Mesh.ARRAY_COLOR] = colours
+    # UVs for the first half of the square creating the line
+    uvs.append(uv_1)
+    uvs.append(uv_2)
+    uvs.append(uv_3)
 
-    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLE_STRIP, surface_array)
+    # UVs for the second half of the square creating the line
+    uvs.append(uv_3)
+    uvs.append(uv_4)
+    uvs.append(uv_2)
+
+
 
 
 # =========================================================
