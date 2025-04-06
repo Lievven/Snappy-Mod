@@ -1054,6 +1054,7 @@ func _draw_grid_mesh():
             _draw_vertical_surface_mesh()
         GEOMETRY.HEX_H:
             _draw_horizontal_surface_mesh()
+            _draw_horizontal_triangle_surface_mesh()
         GEOMETRY.SQUARE:
             _draw_square_surface_mesh()
         _:
@@ -1062,6 +1063,70 @@ func _draw_grid_mesh():
     
     # Actually add the calculated grid to the mesh.
     _add_surface_array_to_mesh()
+
+
+func _draw_horizontal_triangle_surface_mesh():
+    # Map size needed to calculate mesh from 0 to the end of the map.
+    var map_size = Global.World.WoxelDimensions
+    var size = get_hexagon_size()
+    print(snap_interval)
+
+    # Calculating mesh surfaces for vertical lines. Simply loop till we're off the map.
+    var line_x = snap_offset.x
+    while line_x <= map_size.x:
+        var vertical_a = Vector2(line_x, 0)
+        var vertical_b = Vector2(line_x, map_size.y)
+        _add_grid_mesh_triangles(vertical_a, vertical_b)
+        # Since we're doing triangle meshes, we do half resolution to not clutter the map.
+        line_x += snap_interval.x * 2
+    
+    # Calculating mesh surfaces from the north border going south-east.
+    # Offset uses X as well as a factor of Y-offset, due to the angled lines.
+    line_x = snap_offset.x - snap_offset.y * sqrt(3)
+    var directional_vector = Vector2(sqrt(3), 1)
+    _draw_north_triangle_lines(line_x, directional_vector)
+    
+    # Calculating mesh surfaces from the north border going south-west.
+    # Offset uses X as well as a factor of Y-offset, due to the angled lines.
+    line_x = snap_offset.x + snap_offset.y * sqrt(3)
+    directional_vector = Vector2(-sqrt(3), 1)
+    _draw_north_triangle_lines(line_x, directional_vector)
+    
+    # Calculating mesh surfaces from the east border going south-east.
+    # Offset uses Y as well as a factor of X-offset, due to the angled lines.
+    var line_y = snap_offset.y + snap_offset.x * sqrt(3)
+    directional_vector = Vector2(sqrt(3), 1)
+    _draw_east_triangle_lines(line_y, directional_vector)
+
+
+func _draw_north_triangle_lines(line_x, directional_vector):
+    # Starts looping at line_x and loops until line_x is outside the world.
+    while line_x <= Global.World.WoxelDimensions.x:
+        var base_vector = Vector2(line_x, 0)
+        _draw_vector_line(base_vector, directional_vector)
+        # Since we're doing triangle meshes, we do half resolution to not clutter the map.
+        # We need to do half further, since these lines are at an angle to the axis we loop over.
+        line_x += snap_interval.x * 4
+
+
+func _draw_east_triangle_lines(line_y, directional_vector):
+    while line_y <= Global.World.WoxelDimensions.y:
+        var base_vector = Vector2(0, line_y)
+        _draw_vector_line(base_vector, directional_vector)
+        # Since we're doing triangle meshes, we do half resolution to not clutter the map.
+        # We need to do half further, since these lines are at an angle to the axis we loop over.
+        line_y += get_hexagon_size().y * sqrt(3)
+
+
+func _draw_vector_line(base_vector, directional_vector):
+    var map_size = Global.World.WoxelDimensions
+    var end_x = base_vector.x + (map_size.y - base_vector.y) * directional_vector.x / directional_vector.y
+    var end_y = base_vector.y + (map_size.x - base_vector.x) * directional_vector.y / directional_vector.x
+    if end_x > map_size.x:
+        end_x = map_size.x
+    else:
+        end_y = map_size.y
+    _add_grid_mesh_triangles(base_vector, Vector2(end_x, end_y))
 
 
 # Calculates the vertices and UVs for a square grid.
