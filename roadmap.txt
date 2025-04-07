@@ -18,6 +18,7 @@
 	clamp the grid size to a minimum value.
 		⬢ HEXAGONS!!! [DONE]
 		⬢ Rename Spacing to Scaling [Done]
+		⬢ Save triangle vs hexagon display [Done]
 ⬢ Tooltip for Scaling/Offset being Pixels
 
 ⬢ Mirror Tool

@@ -18,6 +18,8 @@ const SQUARE_ICON_PATH = "icons/square_icon.png"
 const ISOMETRIC_ICON_PATH = "icons/isometric_icon.png"
 const EDGE_ICON_PATH = "icons/to_edge_icon.png"
 const CORNER_ICON_PATH = "icons/to_corner_icon.png"
+const TRIANGLE_ICON_PATH = "icons/rewind_icon.png"
+const HEX_ICON_PATH = "icons/snappy_icon.png"
 
 # The path for storing the mod's settings.
 const MOD_DATA_PATH = "user://custom_snap_mod_data.txt"
@@ -70,6 +72,8 @@ var active_geometry = GEOMETRY.HEX_H
 # If true, we measure the hexagon's radius from the centre to the corner.
 # Otherwise we measure the hexagon's radius as the shortest distance from the centre to the edge.
 var radial_mode_to_corner = true
+# If true, the display grid will use triangles. Otherwise hexagons will be used.
+var display_mode_triangles = true
 
 # If true, the offset and interval sliders' x and y sliders become linked and changing x changes y to the same value and the other way around.
 var lock_aspect_offset = true
@@ -319,6 +323,16 @@ func _create_radial_buttons():
     tool_panel.CreateSharedToggle ("Edge", "", not radial_mode_to_corner, Global.Root + EDGE_ICON_PATH, b_group)
     b_group.connect("pressed", self, "_on_radial_mode_changed")
 
+    tool_panel.CreateSeparator()
+    mode_container = HBoxContainer.new()
+    section_container.add_child(mode_container)
+    tool_panel.Align = mode_container
+
+    b_group = ButtonGroup.new()
+    tool_panel.CreateSharedToggle ("Triangle", "", display_mode_triangles, Global.Root + TRIANGLE_ICON_PATH, b_group)
+    tool_panel.CreateSharedToggle ("Hex", "", not display_mode_triangles, Global.Root + HEX_ICON_PATH, b_group)
+    b_group.connect("pressed", self, "_on_triangle_display_mode_changed")
+
     # Closing custom section
     # Easily done by replacing 'Align' with the container previously held by it.
     tool_panel.Align = section_container
@@ -427,6 +441,24 @@ func _on_toggle_mode_changed(button):
             active_geometry = GEOMETRY.ISOMETRIC
             radial_mode_container.visible = false
     _update_custom_mode()
+    _update_grid_visuals()
+    _schedule_save()
+
+
+func _on_triangle_display_mode_changed(button):
+    var previous_mode = display_mode_triangles
+    match button.text:
+        "Triangle":
+            display_mode_triangles = true
+        "Hex":
+            display_mode_triangles = false
+        _:
+            display_mode_triangles = true
+    # We don't want to update if the mode didn't change, as this function may be called by the preset change.
+    if previous_mode == display_mode_triangles:
+        return
+    _update_custom_mode()
+    _update_grid_visuals()
     _schedule_save()
 
 
@@ -445,6 +477,7 @@ func _on_radial_mode_changed(button):
     if previous_mode == radial_mode_to_corner:
         return
     _update_custom_mode()
+    _update_grid_visuals()
     _schedule_save()
 
 
@@ -453,6 +486,7 @@ func _change_preset(preset_index):
     preset_menu_setting = preset_index
     preset_from_dictionary(preset_options[preset_index])
     update_user_interface()
+    _update_grid_visuals()
     _schedule_save()
 
 
@@ -471,6 +505,10 @@ func update_user_interface():
                 button.set_pressed(radial_mode_to_corner)
             "Edge":
                 button.set_pressed(not radial_mode_to_corner)
+            "Triangle":
+                button.set_pressed(display_mode_triangles)
+            "Hex":
+                button.set_pressed(not display_mode_triangles)
 
 
 ## Set the preset mode to the custom preset meant for the most recent changes and also writes any changes to that preset.
@@ -490,6 +528,7 @@ func _toggle_lock_aspect_interval(new_state):
         interval_slider_y.value = interval_slider_x.value
         snap_interval.y = snap_interval.x
     _update_custom_mode()
+    _update_grid_visuals()
     _schedule_save()
 
 
@@ -502,6 +541,7 @@ func _toggle_lock_aspect_offset(new_state):
         offset_slider_y.value = offset_slider_x.value
         snap_offset.y = offset_slider_x.value
     _update_custom_mode()
+    _update_grid_visuals()
     _schedule_save()
 
 
@@ -519,6 +559,7 @@ func _changed_offset_x(value):
         snap_offset.y = value
         offset_slider_y.value = value
     _update_custom_mode()
+    _update_grid_visuals()
     _schedule_save()
 
 
@@ -536,6 +577,7 @@ func _changed_offset_y(value):
         snap_offset.x = value
         offset_slider_x.value = value
     _update_custom_mode()
+    _update_grid_visuals()
     _schedule_save()
 
 
@@ -553,6 +595,7 @@ func _changed_interval_x(value):
         snap_interval.y = value
         interval_slider_y.value = value
     _update_custom_mode()
+    _update_grid_visuals()
     _schedule_save()
 
 
@@ -570,6 +613,7 @@ func _changed_interval_y(value):
         snap_interval.x = value
         interval_slider_x.value = value
     _update_custom_mode()
+    _update_grid_visuals()
     _schedule_save()
 
 
@@ -579,6 +623,10 @@ func _changed_interval_y(value):
 func _schedule_save():
     save_timer = SAVE_DELAY
     save_timer_running = true
+
+
+func _update_grid_visuals():
+    _draw_grid_mesh(true)
 
 
 ## Vanilla update called by Dungeondraft every frame.
@@ -1009,6 +1057,7 @@ func preset_into_dictionary(name = "Custom"):
     var data = {
         "preset_name": name,
         "radial_mode_to_corner": radial_mode_to_corner,
+        "display_mode_triangles": display_mode_triangles,
         "active_geometry": active_geometry,
         "lock_aspect_offset": lock_aspect_offset,
         "lock_aspect_interval": lock_aspect_interval,
@@ -1025,6 +1074,7 @@ func preset_into_dictionary(name = "Custom"):
 ## If the key does not exist, we keep the previous value instead.
 func preset_from_dictionary(data):
     radial_mode_to_corner = data.get("radial_mode_to_corner", radial_mode_to_corner)
+    display_mode_triangles = data.get("display_mode_triangles", display_mode_triangles)
     active_geometry = int(data.get("active_geometry", active_geometry))
     lock_aspect_offset = data.get("lock_aspect_offset", lock_aspect_offset)
     lock_aspect_interval = data.get("lock_aspect_interval", lock_aspect_interval)
@@ -1036,10 +1086,10 @@ func preset_from_dictionary(data):
 
 
 # Helper function to call the appropriate function to calculate the mesh based on the active geometry.
-func _draw_grid_mesh():
+func _draw_grid_mesh(force_draw = false):
     # Currently we only update if zoom changed
     # TODO: also upgrade if we changed snap settings.
-    if previous_zoom == Global.Camera.zoom:
+    if not force_draw and previous_zoom == Global.Camera.zoom:
         return
 
     previous_zoom = Global.Camera.zoom
@@ -1051,10 +1101,15 @@ func _draw_grid_mesh():
     # Select the grid to calculate based on the active geometry.
     match active_geometry:
         GEOMETRY.HEX_V:
-            _draw_vertical_surface_mesh()
+            if display_mode_triangles:
+                _draw_vertical_triangle_surface_mesh()
+            else:
+                _draw_vertical_surface_mesh()
         GEOMETRY.HEX_H:
-            _draw_horizontal_surface_mesh()
-            _draw_horizontal_triangle_surface_mesh()
+            if display_mode_triangles:
+                _draw_horizontal_triangle_surface_mesh()
+            else:
+                _draw_horizontal_surface_mesh()
         GEOMETRY.SQUARE:
             _draw_square_surface_mesh()
         _:
@@ -1065,11 +1120,57 @@ func _draw_grid_mesh():
     _add_surface_array_to_mesh()
 
 
+func _get_triangle_ratio() -> Vector2:
+    if radial_mode_to_corner:
+        return Vector2(sqrt(3), 2)
+    else:
+        return Vector2(2, sqrt(3))
+
+
+func _draw_vertical_triangle_surface_mesh():
+    # Map size needed to calculate mesh from 0 to the end of the map.
+    var map_size = Global.World.WoxelDimensions
+
+    # Calculating mesh surfaces for horizontal lines. Simply loop till we're off the map.
+    var line_y = snap_offset.y
+    while line_y <= map_size.y:
+        var horizontal_a = Vector2(0, line_y)
+        var horizontal_b = Vector2(map_size.x, line_y)
+        _add_grid_mesh_triangles(horizontal_a, horizontal_b)
+        # Since we're doing triangle meshes, we do half resolution to not clutter the map.
+        line_y += snap_interval.y * _get_triangle_ratio().x
+    
+    # Distance between triangles along the respective borders.
+    var north_increment = get_hexagon_size().x * sqrt(3) * 2
+    var east_increment = snap_interval.y * _get_triangle_ratio().x * 2
+    var south_east = Vector2(1, sqrt(3))
+    var south_west = Vector2(-1, sqrt(3))
+    
+    # Calculating mesh surfaces from the north border going south-east.
+    var line_x = snap_offset.x - snap_offset.y * sqrt(3)
+    _draw_north_triangle_lines(line_x, south_east, north_increment)
+    
+    # Calculating mesh surfaces from the east border going south-east.
+    line_y = snap_offset.y - snap_offset.x * sqrt(3) + east_increment
+    var base_vector = Vector2(0, line_y)
+    _draw_east_triangle_lines(base_vector, south_east, east_increment)
+    
+    # Calculating mesh surfaces from the north border going south-west.
+    line_x = snap_offset.x + snap_offset.y * sqrt(3)
+    # x_offset required to continue the lines along the east wall in the same direction
+    var x_offset = _draw_north_triangle_lines(line_x, south_west, north_increment)
+    
+    # Calculating mesh surfaces from the east border going south-east.
+    x_offset -= map_size.x
+    line_y = snap_offset.y + x_offset * sqrt(3)
+    base_vector = Vector2(map_size.x, line_y)
+    _draw_east_triangle_lines(base_vector, south_west, east_increment)
+
+
+
 func _draw_horizontal_triangle_surface_mesh():
     # Map size needed to calculate mesh from 0 to the end of the map.
     var map_size = Global.World.WoxelDimensions
-    var size = get_hexagon_size()
-    print(snap_interval)
 
     # Calculating mesh surfaces for vertical lines. Simply loop till we're off the map.
     var line_x = snap_offset.x
@@ -1078,44 +1179,54 @@ func _draw_horizontal_triangle_surface_mesh():
         var vertical_b = Vector2(line_x, map_size.y)
         _add_grid_mesh_triangles(vertical_a, vertical_b)
         # Since we're doing triangle meshes, we do half resolution to not clutter the map.
-        line_x += snap_interval.x * 2
+        line_x += snap_interval.x * _get_triangle_ratio().x
     
+    # Distance between triangles along the respective borders.
+    var north_increment = snap_interval.x * _get_triangle_ratio().x * 2
+    var east_increment = get_hexagon_size().y * sqrt(3) * 2
+    var south_east = Vector2(sqrt(3), 1)
+    var south_west = Vector2(-sqrt(3), 1)
+
     # Calculating mesh surfaces from the north border going south-east.
-    # Offset uses X as well as a factor of Y-offset, due to the angled lines.
     line_x = snap_offset.x - snap_offset.y * sqrt(3)
-    var directional_vector = Vector2(sqrt(3), 1)
-    _draw_north_triangle_lines(line_x, directional_vector)
-    
-    # Calculating mesh surfaces from the north border going south-west.
-    # Offset uses X as well as a factor of Y-offset, due to the angled lines.
-    line_x = snap_offset.x + snap_offset.y * sqrt(3)
-    directional_vector = Vector2(-sqrt(3), 1)
-    _draw_north_triangle_lines(line_x, directional_vector)
+    _draw_north_triangle_lines(line_x, south_east, north_increment)
     
     # Calculating mesh surfaces from the east border going south-east.
-    # Offset uses Y as well as a factor of X-offset, due to the angled lines.
-    var line_y = snap_offset.y + snap_offset.x * sqrt(3)
-    directional_vector = Vector2(sqrt(3), 1)
-    _draw_east_triangle_lines(line_y, directional_vector)
+    var line_y = snap_offset.y - snap_offset.x / sqrt(3) + east_increment
+    var base_vector = Vector2(0, line_y)
+    _draw_east_triangle_lines(base_vector, south_east, east_increment)
+    
+    # Calculating mesh surfaces from the north border going south-west.
+    line_x = snap_offset.x + snap_offset.y * sqrt(3)
+    # x_offset required to continue the lines along the east wall in the same direction
+    var x_offset = _draw_north_triangle_lines(line_x, south_west, north_increment)
+    
+    # Calculating mesh surfaces from the east border going south-east.
+    x_offset -= map_size.x
+    line_y = snap_offset.y + x_offset / sqrt(3)
+    base_vector = Vector2(map_size.x, line_y)
+    _draw_east_triangle_lines(base_vector, south_west, east_increment)
 
 
-func _draw_north_triangle_lines(line_x, directional_vector):
+# @return the final position as it is required to calculated to calculate the starting points
+# for the lines continuing on the east wall in the south-western direction.
+func _draw_north_triangle_lines(line_x, directional_vector, increment):
     # Starts looping at line_x and loops until line_x is outside the world.
     while line_x <= Global.World.WoxelDimensions.x:
         var base_vector = Vector2(line_x, 0)
         _draw_vector_line(base_vector, directional_vector)
         # Since we're doing triangle meshes, we do half resolution to not clutter the map.
         # We need to do half further, since these lines are at an angle to the axis we loop over.
-        line_x += snap_interval.x * 4
+        line_x += increment
+    return line_x
 
 
-func _draw_east_triangle_lines(line_y, directional_vector):
-    while line_y <= Global.World.WoxelDimensions.y:
-        var base_vector = Vector2(0, line_y)
+func _draw_east_triangle_lines(base_vector, directional_vector, increment):
+    while base_vector.y <= Global.World.WoxelDimensions.y:
         _draw_vector_line(base_vector, directional_vector)
         # Since we're doing triangle meshes, we do half resolution to not clutter the map.
         # We need to do half further, since these lines are at an angle to the axis we loop over.
-        line_y += get_hexagon_size().y * sqrt(3)
+        base_vector.y += increment
 
 
 func _draw_vector_line(base_vector, directional_vector):
