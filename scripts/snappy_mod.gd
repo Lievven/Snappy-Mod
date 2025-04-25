@@ -447,6 +447,7 @@ func _on_toggle_mode_changed(button):
     _schedule_save()
 
 
+# Changes display mode between the faster triangle mode and the badly performing, better visual hexagon mode.
 func _on_triangle_display_mode_changed(button):
     var previous_mode = display_mode_triangles
     match button.text:
@@ -1124,6 +1125,7 @@ func _draw_grid_mesh(force_draw = false):
     _add_surface_array_to_mesh()
 
 
+# Helper function to provide ratios for hexagon radius distances
 func _get_triangle_ratio() -> Vector2:
     if radial_mode_to_corner:
         return Vector2(sqrt(3), 2)
@@ -1131,6 +1133,9 @@ func _get_triangle_ratio() -> Vector2:
         return Vector2(2, sqrt(3))
 
 
+# Calculates the vertices and UVs for a hexagonal grid displayed as triangles in vertical (point sideways) orientation.
+# Rendering and calculation is fast since the amount of straight lines is in O(n)
+# As a rule of thumb, any lines drawn always originate from the HIGHER end of the line.
 func _draw_vertical_triangle_surface_mesh():
     # Map size needed to calculate mesh from 0 to the end of the map.
     var map_size = Global.World.WoxelDimensions
@@ -1143,7 +1148,7 @@ func _draw_vertical_triangle_surface_mesh():
         size_factor *= 2
 
     # Calculating mesh surfaces for horizontal lines. Simply loop till we're off the map.
-    var line_y = fmod(snap_offset.y, snap_interval.y * _get_triangle_ratio().x * size_factor / 2)
+    var line_y = fposmod(snap_offset.y, snap_interval.y * _get_triangle_ratio().x * size_factor / 2)
     while line_y <= map_size.y:
         var horizontal_a = Vector2(0, line_y)
         var horizontal_b = Vector2(map_size.x, line_y)
@@ -1160,29 +1165,32 @@ func _draw_vertical_triangle_surface_mesh():
 
     # Calculating mesh surfaces from the north border going south-east.
     var line_x = snap_offset.x - snap_offset.y * sqrt(3) / 3 * vertical_multiplier
-    line_x = fmod(line_x, north_increment)
+    line_x = fposmod(line_x, north_increment)
     _draw_north_triangle_lines(line_x, south_east, north_increment)
     
     # Calculating mesh surfaces from the east border going south-east.
     line_y = snap_offset.y - snap_offset.x * sqrt(3) / vertical_multiplier
-    line_y = fmod(line_y, east_increment) + east_increment
+    line_y = fposmod(line_y, east_increment)
     var base_vector = Vector2(0, line_y)
     _draw_east_triangle_lines(base_vector, south_east, east_increment)
     
     # Calculating mesh surfaces from the north border going south-west.
     line_x = snap_offset.x + snap_offset.y * sqrt(3) / 3 * vertical_multiplier
-    line_x = fmod(line_x, north_increment)
+    line_x = fposmod(line_x, north_increment)
     # x_offset required to continue the lines along the east wall in the same direction
     var x_offset = _draw_north_triangle_lines(line_x, south_west, north_increment)
     
     # Calculating mesh surfaces from the east border going south-east.
     x_offset -= map_size.x
-    line_y = x_offset * sqrt(3) / vertical_multiplier   # y_offset and fmod is already indirectly included via x_offset
+    line_y = x_offset * sqrt(3) / vertical_multiplier   # y_offset and fposmod is already indirectly included via x_offset
     base_vector = Vector2(map_size.x, line_y)
     _draw_east_triangle_lines(base_vector, south_west, east_increment)
 
 
 
+# Calculates the vertices and UVs for a hexagonal grid displayed as triangles in horizontal (point up) orientation.
+# Rendering and calculation is fast since the amount of straight lines is in O(n)
+# As a rule of thumb, any lines drawn always originate from the HIGHER end of the line.
 func _draw_horizontal_triangle_surface_mesh():
     # Map size needed to calculate mesh from 0 to the end of the map.
     var map_size = Global.World.WoxelDimensions
@@ -1195,7 +1203,7 @@ func _draw_horizontal_triangle_surface_mesh():
         size_factor *= 2
     
     # Calculating mesh surfaces for vertical lines. Simply loop till we're off the map.
-    var line_x = fmod(snap_offset.x, snap_interval.x * _get_triangle_ratio().x * size_factor / 2)
+    var line_x = fposmod(snap_offset.x, snap_interval.x * _get_triangle_ratio().x * size_factor / 2)
     while line_x <= map_size.x:
         var vertical_a = Vector2(line_x, 0)
         var vertical_b = Vector2(line_x, map_size.y)
@@ -1212,27 +1220,30 @@ func _draw_horizontal_triangle_surface_mesh():
 
     # Calculating mesh surfaces from the north border going south-east.
     line_x = snap_offset.x - snap_offset.y * sqrt(3) * vertical_multiplier
-    line_x = fmod(line_x, north_increment)
+    line_x = fposmod(line_x, north_increment)
     _draw_north_triangle_lines(line_x, south_east, north_increment)
     
     # Calculating mesh surfaces from the east border going south-east.
     var line_y = snap_offset.y - snap_offset.x / sqrt(3) / vertical_multiplier
-    line_y = fmod(line_y, east_increment) + east_increment
+    line_y = fposmod(line_y, east_increment)
     var base_vector = Vector2(0, line_y)
     _draw_east_triangle_lines(base_vector, south_east, east_increment)
     
     # Calculating mesh surfaces from the north border going south-west.
     line_x = snap_offset.x + snap_offset.y * sqrt(3) * vertical_multiplier
+    line_x = fposmod(line_x, north_increment)
     # x_offset required to continue the lines along the east wall in the same direction
     var x_offset = _draw_north_triangle_lines(line_x, south_west, north_increment)
     
     # Calculating mesh surfaces from the east border going south-east.
     x_offset -= map_size.x
-    line_y = x_offset / sqrt(3) / vertical_multiplier   # y_offset and fmod is already indirectly included via x_offset
+    line_y = x_offset / sqrt(3) / vertical_multiplier   # y_offset and fposmod is already indirectly included via x_offset
     base_vector = Vector2(map_size.x, line_y)
     _draw_east_triangle_lines(base_vector, south_west, east_increment)
 
 
+# Draws lines for the triangle mesh originating from the north side, aiming down left and down right.
+# Lines going the same direction but not touching the north border of the world are drawn by _draw_east_triangle_lines() instead.
 # @return the final position as it is required to calculated to calculate the starting points
 # for the lines continuing on the east wall in the south-western direction.
 func _draw_north_triangle_lines(line_x, directional_vector, increment):
@@ -1246,7 +1257,11 @@ func _draw_north_triangle_lines(line_x, directional_vector, increment):
     return line_x
 
 
+# Draws lines for the triangle mesh originating from the east or west side, aiming downwards.
+# Any upwards running lines are drawn by _draw_north_triangle_lines() instead.
 func _draw_east_triangle_lines(base_vector, directional_vector, increment):
+    if base_vector.y == 0:
+        base_vector.y += increment
     while base_vector.y <= Global.World.WoxelDimensions.y:
         _draw_vector_line(base_vector, directional_vector)
         # Since we're doing triangle meshes, we do half resolution to not clutter the map.
@@ -1254,6 +1269,9 @@ func _draw_east_triangle_lines(base_vector, directional_vector, increment):
         base_vector.y += increment
 
 
+# Takes a base vector and directional vector, then draws a line originating from the base vector in that direction.
+# The line always ends at the screen border.
+# Lines should always go in a downwards direction
 func _draw_vector_line(base_vector, directional_vector):
     var map_size = Global.World.WoxelDimensions
     var end_x = base_vector.x + (map_size.y - base_vector.y) * directional_vector.x / directional_vector.y
@@ -1267,13 +1285,12 @@ func _draw_vector_line(base_vector, directional_vector):
 
 # Calculates the vertices and UVs for a square grid.
 # Both rendering and calculation are fast since it operates in O(n)
-# TODO: Currently, an offset larger than the snap interval will result in missing lines.
 func _draw_square_surface_mesh():
     # Map size needed to calculate mesh from 0 to the end of the map.
     var map_size = Global.World.WoxelDimensions
 
     # Calculating mesh surfaces for vertical lines. Simply loop till we're off the map.
-    var line_x = snap_offset.x
+    var line_x = fposmod(snap_offset.x, snap_interval.x)
     while line_x <= map_size.x:
         var vertical_a = Vector2(line_x, 0)
         var vertical_b = Vector2(line_x, map_size.y)
@@ -1281,7 +1298,7 @@ func _draw_square_surface_mesh():
         line_x += snap_interval.x
 
     # Calculating mesh surfaces for horizontal lines. Simply loop till we're off the map.
-    var line_y = snap_offset.y
+    var line_y = fposmod(snap_offset.y, snap_interval.y)
     while line_y <= map_size.y:
         var horizontal_a = Vector2(0, line_y)
         var horizontal_b = Vector2(map_size.x, line_y)
