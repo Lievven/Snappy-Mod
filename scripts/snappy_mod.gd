@@ -337,7 +337,7 @@ func _create_radial_buttons():
     # Easily done by replacing 'Align' with the container previously held by it.
     tool_panel.Align = section_container
 
-    tool_panel.CreateNote("Warning: Hexagon display is an experimental feature and can cause lagg. It is recommended to use triangles for now.")
+    tool_panel.CreateNote("Warning: Hexagon display is an experimental feature and may cause performance issues on large maps.")
 
     tool_panel.CreateSeparator()
     tool_panel.EndSection()
@@ -1110,11 +1110,13 @@ func _draw_grid_mesh(force_draw = false):
                 _draw_vertical_triangle_surface_mesh()
             else:
                 _draw_vertical_surface_mesh()
+                return
         GEOMETRY.HEX_H:
             if display_mode_triangles:
                 _draw_horizontal_triangle_surface_mesh()
             else:
                 _draw_horizontal_surface_mesh()
+                return
         GEOMETRY.SQUARE:
             _draw_square_surface_mesh()
         _:
@@ -1128,7 +1130,7 @@ func _draw_grid_mesh(force_draw = false):
 # Helper function to provide ratios for hexagon radius distances
 func _get_triangle_ratio() -> Vector2:
     if radial_mode_to_corner:
-        return Vector2(sqrt(3), 2)
+        return Vector2(sqrt(3), 1.5)
     else:
         return Vector2(2, sqrt(3))
 
@@ -1307,12 +1309,20 @@ func _draw_square_surface_mesh():
 
 
 # Calculates the vertices and UVs for a hexagonal grid in vertical orientation.
-# While rendering is fast, the calculation is rather slow as it operates in O(n²)
-# Rendering more than 30x30 hexes quickly causes a second or more in delay.
-# Calling this as rarely as possible is advised.
+# While rendering is fast, the calculation is still somewhat slow and may cause lagg.
 func _draw_vertical_surface_mesh():
-
+    # Retrieving mesh and cleaning vanilla DD grid.
+    var mesh = Global.World.get_child("GridMesh").get_mesh()
+    mesh.clear_surfaces()
+    
+    # We make sure the snap interval can't be less than 64
+    # Anything smaller than that is just gonna cause horrible performance.
+    var clamped_interval = snap_interval
     var size = get_hexagon_size()
+    while min(clamped_interval.x, clamped_interval.y) < 64:
+        clamped_interval *= 2
+        size *= 2
+
 
     # We tile caltrop shapes to form a hexagon grid. Three spikes per hexagon. These are the ends of the spikes relative to the middle vertex.
     var offset_e = Vector2(sqrt(3), 0) * size
@@ -1324,29 +1334,70 @@ func _draw_vertical_surface_mesh():
     var columns = Global.World.WoxelDimensions.x / size.x / 2 + 1
 
     # Since hexagons don't tile in a square, use a parallelogram shape.
+    for q in range(columns):
+        # Calculate the base vector for each spike.
+        # Vertical arrangement only requires one caltrop every 3 hexagons
+        # Horizontal arrangement on the other one one every hexagon
+        var vec_x = sqrt(3) * q * 3
+        var vec_y = 0
+        # Move the base vector based on the grid interval and offset.
+        var shifted_offset_x = fposmod(snap_offset.x, clamped_interval.x * _get_triangle_ratio().y * 2)
+        shifted_offset_x -= clamped_interval.x * _get_triangle_ratio().y * 2
+        var shifted_offset_y = fposmod(snap_offset.y, clamped_interval.y * _get_triangle_ratio().x)
+        shifted_offset_y -= clamped_interval.y * _get_triangle_ratio().x
+        # Move the base vector based on the grid interval and offset.
+        var hex_origin = Vector2(vec_x, vec_y) * size + Vector2(shifted_offset_x, shifted_offset_y)
+        
+        # Apply the offsets and add the lines to the mesh.
+        _add_grid_mesh_triangles(hex_origin, hex_origin + offset_e)
+        _add_grid_mesh_triangles(hex_origin, hex_origin + offset_sw)
+        _add_grid_mesh_triangles(hex_origin, hex_origin + offset_nw)
+
+    # Initialising the surface array.
+    var surface_array = []
+    surface_array.resize(Mesh.ARRAY_MAX)
+
+    # Gotta paint each vertex white. DD just tints the thing in a shader or the texture.
+    var colours = PoolColorArray()
+    for i in range(verts.size()):
+        colours.append(Color.white)
+
+    # Insert the subarrays into the surface array.
+    surface_array[Mesh.ARRAY_VERTEX] = verts
+    surface_array[Mesh.ARRAY_TEX_UV] = uvs
+    surface_array[Mesh.ARRAY_COLOR] = colours
+    
+    # Adds the surface to the mesh.
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_array)
+
+    # Copy the surface for the first column of caltrop shapes into all other columns
     for r in range(rows):
-        for q in range(-r/2, columns - r/2):
-            # Calculate the base vector for each spike.
-            # Vertical arrangement only requires one caltrop every 3 hexagons
-            # Horizontal arrangement on the other one one every hexagon
-            var vec_x = sqrt(3) * q * 3 + sqrt(3) * 1.5 * r
-            var vec_y = 1.5 * r
-            # Move the base vector based on the grid interval and offset.
-            var hex_origin = Vector2(vec_x, vec_y) * size + snap_offset
-            
-            # Apply the offsets and add the lines to the mesh.
-            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_e)
-            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_sw)
-            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_nw)
+        # Offset jiggle sideways since caltrops are staggered.
+        var jiggle = Vector3(sqrt(3) * 1.5 * size.x, 1.5 * size.y, 0)
+        if r % 2 == 0:
+            jiggle = Vector3(-sqrt(3) * 1.5 * size.x, 1.5 * size.y, 0)
+
+        # Add jiggles to all surfaces of the column
+        for i in range(verts.size()):
+            verts[i] = verts[i] + jiggle
+        surface_array[Mesh.ARRAY_VERTEX] = verts
+        mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_array)
 
 
 # Calculates the vertices and UVs for a hexagonal grid in horizontal orientation.
-# While rendering is fast, the calculation is rather slow.
-# Rendering more than 30x30 hexes quickly causes a second or more in delay.
-# Calling this as rarely as possible is advised.
+# While rendering is fast, the calculation is still somewhat slow and may cause lagg.
 func _draw_horizontal_surface_mesh():
+    # Retrieving mesh and cleaning vanilla DD grid.
+    var mesh = Global.World.get_child("GridMesh").get_mesh()
+    mesh.clear_surfaces()
 
+    # We make sure the snap interval can't be less than 64
+    # Anything smaller than that is just gonna cause horrible performance.
+    var clamped_interval = snap_interval
     var size = get_hexagon_size()
+    while min(clamped_interval.x, clamped_interval.y) < 64:
+        clamped_interval *= 2
+        size *= 2
 
     # We tile caltrop shapes to form a hexagon grid. Three spikes per hexagon. These are the ends of the spikes relative to the middle vertex.
     var offset_s = Vector2(0, sqrt(3)) * size
@@ -1358,25 +1409,58 @@ func _draw_horizontal_surface_mesh():
     var columns = Global.World.WoxelDimensions.x / size.x * 2 + 1
 
     # Since hexagons don't tile in a square, use a parallelogram shape.
-    for q in range(columns):
-        for r in range(-q/2, rows - q/2):
-            # Calculate the base vector for each spike.
-            # Horizontal arrangement only requires one caltrop every 3 hexagons
-            # Vertical arrangement on the other one one every hexagon
-            var vec_x = 1.5 * q
-            var vec_y = sqrt(3) * 1.5 * q + sqrt(3) * 3 * r
-            # Move the base vector based on the grid interval and offset.
-            var hex_origin = Vector2(vec_x, vec_y) * size + snap_offset
+    for r in range(rows):
+        # Calculate the base vector for each spike.
+        # Horizontal arrangement only requires one caltrop every 3 hexagons
+        # Vertical arrangement on the other one one every hexagon
+        var vec_x = 0
+        var vec_y = sqrt(3) * 3 * r
+        # Move the base vector based on the grid interval and offset.
+        var shifted_offset_x = fposmod(snap_offset.x, clamped_interval.x * _get_triangle_ratio().x)
+        shifted_offset_x -= clamped_interval.x * _get_triangle_ratio().x
+        var shifted_offset_y = fposmod(snap_offset.y, clamped_interval.y * _get_triangle_ratio().y * 2)
+        shifted_offset_y -= clamped_interval.y * _get_triangle_ratio().y * 2
+        var hex_origin = Vector2(vec_x, vec_y) * size + Vector2(shifted_offset_x, shifted_offset_y)
 
-            # Apply the offsets and add the lines to the mesh.
-            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_s)
-            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_ne)
-            _add_grid_mesh_triangles(hex_origin, hex_origin + offset_nw)
+        # Apply the offsets and add the lines to the mesh.
+        _add_grid_mesh_triangles(hex_origin, hex_origin + offset_s)
+        _add_grid_mesh_triangles(hex_origin, hex_origin + offset_ne)
+        _add_grid_mesh_triangles(hex_origin, hex_origin + offset_nw)
+
+    # Initialising the surface array.
+    var surface_array = []
+    surface_array.resize(Mesh.ARRAY_MAX)
+
+    # Gotta paint each vertex white. DD just tints the thing in a shader or the texture.
+    var colours = PoolColorArray()
+    for i in range(verts.size()):
+        colours.append(Color.white)
+
+    # Insert the subarrays into the surface array.
+    surface_array[Mesh.ARRAY_VERTEX] = verts
+    surface_array[Mesh.ARRAY_TEX_UV] = uvs
+    surface_array[Mesh.ARRAY_COLOR] = colours
+    
+    # Adds the surface to the mesh.
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_array)
+
+    # Copy the surface for the first column of caltrop shapes into all other columns
+    for q in range(columns):
+        # Offset jiggle sideways since caltrops are staggered.
+        var jiggle = Vector3(1.5 * size.x, sqrt(3) * 1.5 * size.y, 0)
+        if q % 2 == 0:
+            jiggle = Vector3(1.5 * size.x, -sqrt(3) * 1.5 * size.y, 0)
+    
+        # Add jiggles to all surfaces of the row
+        for i in range(verts.size()):
+            verts[i] = verts[i] + jiggle
+        surface_array[Mesh.ARRAY_VERTEX] = verts
+        mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_array)
+
 
 
 # Adds the subarrays to the surface array and then to the mesh for rendering.
 # TODO: We might be able to store the meshes for immediate rendering.
-#       As it stands, generating large amounts of hexagons takes a couple seconds.
 func _add_surface_array_to_mesh():
     # Retrieving mesh and cleaning vanilla DD grid.
     var mesh = Global.World.get_child("GridMesh").get_mesh()
@@ -1475,7 +1559,8 @@ func _create_debug_section():
 ## Debug function, very important. Prints whatever stuff I need to know at the moment.
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
-    _draw_grid_mesh()
+
+    _draw_vertical_surface_mesh()
 
 #    hexagon_radius = fmod(hexagon_radius + 64, 256)
 #    print(hexagon_radius)
