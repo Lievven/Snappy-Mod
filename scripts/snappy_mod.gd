@@ -647,8 +647,15 @@ func update(delta):
             save_user_settings()
             save_local_settings()
 
-    # If the user currently wishes to use default snapping, or has snapping disabled entirely, we return as we do not want to snap to anything.
-    if not (custom_snap_enabled and Global.Editor.IsSnapping):
+    # If the user currently wishes to use default snapping, we return as we do not want to snap to anything.
+    if not custom_snap_enabled:
+        return
+        
+    # Updates the displayed grid to match the snap points. We still draw even if we do not snap, so the user still sees the grid.
+    _draw_grid_mesh()
+
+    # If the user disabled vanilla snapping, we don't want to snap either.
+    if not Global.Editor.IsSnapping:
         return
 
     # Our current cursor position, adjusted to snap to our invisible Snappy Grid.
@@ -685,8 +692,6 @@ func update(delta):
     # Snaps the Building, Pattern, Water, Path, etc. polygons to the Snappy Grid.
     _update_selection_box(snap)
 
-    # Updates the displayed grid to match the snap points
-    _draw_grid_mesh()
 
 
 
