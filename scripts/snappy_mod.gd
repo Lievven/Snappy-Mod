@@ -1192,6 +1192,7 @@ func load_local_settings():
 func settings_into_dictionary(is_local = false):
     var data = {
         "custom_snap_enabled": custom_snap_enabled,
+        "custom_grid_enabled": custom_grid_enabled,
         "advanced_section_enabled": advanced_section_enabled,
         "active_preset": preset_options[preset_menu_setting]["preset_name"],
     }
@@ -1207,6 +1208,7 @@ func settings_into_dictionary(is_local = false):
 ## If the key does not exist, we keep the previous value instead.
 func settings_from_dictionary(data):
     custom_snap_enabled = data.get("custom_snap_enabled", custom_snap_enabled)
+    custom_grid_enabled = data.get("custom_grid_enabled", custom_grid_enabled)
     advanced_section_enabled = data.get("advanced_section_enabled", advanced_section_enabled)
     # Global settings have preset options which we want to keep if we load local settings (which do not have preset_options).
     preset_options = data.get("preset_options", preset_options)
