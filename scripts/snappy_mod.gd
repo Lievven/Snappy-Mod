@@ -11,6 +11,7 @@ const MOD_DISPLAY_NAME = "Custom Snap Mod"
 
 # Icon paths
 const TOOL_ICON_PATH = "icons/snappy_icon.png"
+const SMALL_ICON_PATH = "icons/snappy_icon_small.png"
 const REWIND_ICON_PATH = "icons/rewind_icon.png"
 const VERTICAL_HEX_ICON_PATH = "icons/hex_icon_vertical.png"
 const HORIZONTAL_HEX_ICON_PATH = "icons/hex_icon_horizontal.png"
@@ -18,8 +19,8 @@ const SQUARE_ICON_PATH = "icons/square_icon.png"
 const ISOMETRIC_ICON_PATH = "icons/isometric_icon.png"
 const EDGE_ICON_PATH = "icons/to_edge_icon.png"
 const CORNER_ICON_PATH = "icons/to_corner_icon.png"
-const TRIANGLE_ICON_PATH = "icons/rewind_icon.png"
-const HEX_ICON_PATH = "icons/snappy_icon.png"
+const TRIANGLE_ICON_PATH = "icons/triangle_mode.png"
+const HEX_ICON_PATH = "icons/hex_mode.png"
 
 # The path for storing the mod's settings.
 const MOD_DATA_PATH = "user://custom_snap_mod_data.txt"
@@ -56,6 +57,13 @@ var previous_zoom
 
 # We snap according to the position of this given item if multiple items are selected
 var item_index = 0
+# The previously selected items. If changed, we need to update the selection snap transforms.
+var raw_selectables
+# The select tool, and the button controlling when a selection is snapped.
+var select_tool
+var snap_selection_button
+# The last transformation made by the snap select tool button.
+var previous_transform = Vector2(0, 0)
 
 # A timer to put a slight delay between changing the sliders and saving so we don't save a million times.
 var save_timer = SAVE_DELAY
@@ -214,8 +222,9 @@ func start():
     load_local_settings()
     preset_from_dictionary(preset_options[preset_menu_setting])
 
-    # Fetch tool panel for level selection.
+    # Fetch tool panels for level selection.
     tool_panel = Global.Editor.Toolset.CreateModTool(self, TOOL_CATEGORY, TOOL_ID, TOOL_NAME, Global.Root + TOOL_ICON_PATH)
+    select_tool = Global.Editor.Tools["SelectTool"]
 
     # Begin core section
     tool_panel.BeginSection(false)
@@ -410,14 +419,13 @@ func _create_offset_sliders():
 
 # Creates the button assigned to move all items selected by the selection tool to the closest grid snap.
 func _create_snap_selection_button():
-    var select_tool = Global.Editor.Toolset.GetToolPanel("SelectTool")
-    
-    var snap_selection_button = select_tool.CreateButton("Snap Selection", Global.Root + TOOL_ICON_PATH)
+    var select_panel = Global.Editor.Toolset.GetToolPanel("SelectTool")
+    snap_selection_button = select_panel.CreateButton("Snap Selection", Global.Root + SMALL_ICON_PATH)
     snap_selection_button.connect("pressed", self, "_on_snap_select_button")
 
     # We're using the Mirror node as an indicator, as we add the button right after it.
     var target_text = "Mirror"
-    var above_node = _find_node_by_text(select_tool, target_text, 3)
+    var above_node = _find_node_by_text(select_panel, target_text, 3)
 
     # Moves the snap selection button below the node we want above it.
     snap_selection_button.get_parent().remove_child(snap_selection_button)
@@ -560,19 +568,40 @@ func update_user_interface():
 # Called by the 'Snap Select' button.
 # Moves the selection to the closest snap point.
 func _on_snap_select_button():
-    var select_tool = Global.Editor.Tools["SelectTool"]
+    var selection_changed = _populate_initial_transforms()
 
-    # Populating 'initial transforms' for all selected objects.
+    var move_transform = _calculate_select_box_snap_offset(selection_changed)
+
+    # Saving previous transforms for Undo history.
+    select_tool.SavePreTransforms()
+    select_tool.RecordTransforms()
+
+    # Apply transformation to all selected objects and the outline box
+    select_tool.ApplyTransforms(move_transform[0])
+    select_tool.transformBox.position += move_transform[1]
+
+
+# Populating 'initial transforms' for all objects chosen by the Select Tool.
+# Returns @true if selected items changed and @false if not.
+func _populate_initial_transforms():
+    # If the selectables haven't changed, the corresponding intial transforms are still up to date.
+    if raw_selectables == select_tool.RawSelectables:
+        return false
+
     var initial_tranforms = {}
-    var raw_selectables = select_tool.RawSelectables
+    raw_selectables = select_tool.RawSelectables
     for selectable in raw_selectables:
         initial_tranforms[selectable] = selectable.Thing.transform
 
     select_tool.initialRelativeTransforms = initial_tranforms
+    return true
 
-    
+
+func _calculate_select_box_snap_offset(selection_changed):
     # If item_index is 0, our target position is just the box outline's position
     var target_position = select_tool.transformBox.position
+    
+    var raw_selectables = select_tool.RawSelectables
 
     # Otherwise we go through the items in order.
     # Modulo operation exists to deal with potentially changing sizes.
@@ -580,23 +609,26 @@ func _on_snap_select_button():
         var selectable = raw_selectables[(item_index - 1) % raw_selectables.size()].Thing
         target_position = selectable.position
 
-    # Gets the difference between the target position and its snapped equal
-    var new_position = get_snapped_position(target_position) - target_position
-
     # When counting up the index, remember we need to Modulo by 1 more, which is the box outline.
     item_index = (item_index + 1) % (raw_selectables.size() + 1)
 
+    # If the previous selection changed, we're operating from a new position and don't need an offset.
+    if selection_changed:
+        previous_transform = Vector2(0, 0)
+
+    # Gets the difference between the target position and its snapped equal
+    # The ApplyTransform replaces the previous transform, so they need to add.
+    var target_offset = get_snapped_position(target_position - previous_transform)
+    var box_offset = target_offset - target_position
+    target_offset = box_offset + previous_transform
+    
     # Assigning the affine transform
     var move_transform = Transform2D()
-    move_transform.origin += new_position
+    move_transform.origin += target_offset
 
-    # Saving previous transforms for Undo history.
-    select_tool.SavePreTransforms()
-    select_tool.RecordTransforms()
+    previous_transform = target_offset
+    return [move_transform, box_offset]
 
-    # Apply transformation to all selected objects and the outline box
-    select_tool.ApplyTransforms(move_transform)
-    select_tool.transformBox.position += move_transform.origin
 
 
 ## Set the preset mode to the custom preset meant for the most recent changes and also writes any changes to that preset.
@@ -718,7 +750,7 @@ func _update_grid_visuals():
         return
     _draw_grid_mesh(true)
 
-
+var debug 
 ## Vanilla update called by Dungeondraft every frame.
 func update(delta):
     # Check to see if we need to save our user settings.
@@ -731,6 +763,11 @@ func update(delta):
             save_timer_running = false
             save_user_settings()
             save_local_settings()
+            
+
+    # Updates whether the 'Snap Selection' button is available to press or not.
+    # Important to do now, since it has to work even when other snapping is disabled.
+    _update_select_button_status()
 
     # If the user currently wishes to use default snapping, we return as we do not want to snap to anything.
     if not custom_snap_enabled:
@@ -779,7 +816,6 @@ func update(delta):
 
     # Snaps a text box to the Snappy Grid.
     _update_text_box(snap)
-
 
 
 
@@ -1063,6 +1099,15 @@ func _update_text_box(snap):
     var text = text_tool.focus
     if text_tool.isDragging:
         text.rect_position = snap - text.rect_size * text.rect_scale / 2
+
+
+
+# Updates the Snap Selection button to only be active while items are selected.
+func _update_select_button_status():
+    if select_tool.RawSelectables.size() > 0:
+        snap_selection_button.disabled = false
+    else:
+        snap_selection_button.disabled = true
 
 
 
@@ -1663,7 +1708,7 @@ func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
 
     #print_methods(Script)
-    print_properties(Script)
+    print_methods(Global.Editor.Tools["SelectTool"])
 
 #    hexagon_radius = fmod(hexagon_radius + 64, 256)
 #    print(hexagon_radius)
@@ -1709,7 +1754,7 @@ func print_methods(node):
     var method_list = node.get_method_list()
     for method in method_list:
         print(method.name)
-        print(method)
+        #print(method)
 
 
 ## Debug function, prints signals of the given node
