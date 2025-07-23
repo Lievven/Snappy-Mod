@@ -54,6 +54,8 @@ var preset_menu
 # ==== MOD STATE ====
 var previous_zoom
 
+# We snap according to the position of this given item if multiple items are selected
+var item_index = 0
 
 # A timer to put a slight delay between changing the sliders and saving so we don't save a million times.
 var save_timer = SAVE_DELAY
@@ -263,6 +265,9 @@ func start():
 
     tool_panel.EndSection()
 
+    print("[%s] Adding \"Snap to Grid\" option to Select menu" % MOD_DISPLAY_NAME)
+    _create_snap_selection_button()
+
     print("[%s] UI Layout: successful" % MOD_DISPLAY_NAME)
 
 
@@ -403,6 +408,43 @@ func _create_offset_sliders():
     lock_aspect_offset_button.set_tooltip("Locks aspect ration between the offset sliders. Keep this locked unless you need to have different snap spacing for each axis.")
 
 
+# Creates the button assigned to move all items selected by the selection tool to the closest grid snap.
+func _create_snap_selection_button():
+    var select_tool = Global.Editor.Toolset.GetToolPanel("SelectTool")
+    
+    var snap_selection_button = select_tool.CreateButton("Snap Selection", Global.Root + TOOL_ICON_PATH)
+    snap_selection_button.connect("pressed", self, "_on_snap_select_button")
+
+    # We're using the Mirror node as an indicator, as we add the button right after it.
+    var target_text = "Mirror"
+    var above_node = _find_node_by_text(select_tool, target_text, 3)
+
+    # Moves the snap selection button below the node we want above it.
+    snap_selection_button.get_parent().remove_child(snap_selection_button)
+    if above_node:
+        above_node.get_parent().add_child_below_node(above_node, snap_selection_button)
+    else:
+        print("[%s] Couldn't create Snap Selection button. Missing the '%s' node" % [MOD_DISPLAY_NAME, target_text])
+
+
+# Finds a node by the content of its 'text' property.
+# This is necessary since a lot of vanilla nodes in DD aren't named.
+# Does a recursive depth search through all children and their children, up to the given depth.
+func _find_node_by_text(parent, text, depth = 10):
+    if depth == 0:
+        return null
+
+    # Just loop over all the children and check their 'text' property
+    for child in parent.get_children():
+        if "text" in child and child.text == text:
+            return child
+
+        # We doing recursion, since many UI items are hidden in containers.
+        var next = _find_node_by_text(child, text, depth - 1)
+        if not next == null:
+            return next
+    
+    return null
 
 
 ## Sets the flag to disable/enable the tool and return to/from vanilla DD snapping mechanics.
@@ -512,6 +554,49 @@ func update_user_interface():
                 button.set_pressed(display_mode_triangles)
             "Hex":
                 button.set_pressed(not display_mode_triangles)
+
+
+
+# Called by the 'Snap Select' button.
+# Moves the selection to the closest snap point.
+func _on_snap_select_button():
+    var select_tool = Global.Editor.Tools["SelectTool"]
+
+    # Populating 'initial transforms' for all selected objects.
+    var initial_tranforms = {}
+    var raw_selectables = select_tool.RawSelectables
+    for selectable in raw_selectables:
+        initial_tranforms[selectable] = selectable.Thing.transform
+
+    select_tool.initialRelativeTransforms = initial_tranforms
+
+    
+    # If item_index is 0, our target position is just the box outline's position
+    var target_position = select_tool.transformBox.position
+
+    # Otherwise we go through the items in order.
+    # Modulo operation exists to deal with potentially changing sizes.
+    if item_index > 0:
+        var selectable = raw_selectables[(item_index - 1) % raw_selectables.size()].Thing
+        target_position = selectable.position
+
+    # Gets the difference between the target position and its snapped equal
+    var new_position = get_snapped_position(target_position) - target_position
+
+    # When counting up the index, remember we need to Modulo by 1 more, which is the box outline.
+    item_index = (item_index + 1) % (raw_selectables.size() + 1)
+
+    # Assigning the affine transform
+    var move_transform = Transform2D()
+    move_transform.origin += new_position
+
+    # Saving previous transforms for Undo history.
+    select_tool.SavePreTransforms()
+    select_tool.RecordTransforms()
+
+    # Apply transformation to all selected objects and the outline box
+    select_tool.ApplyTransforms(move_transform)
+    select_tool.transformBox.position += move_transform.origin
 
 
 ## Set the preset mode to the custom preset meant for the most recent changes and also writes any changes to that preset.
@@ -691,6 +776,9 @@ func update(delta):
     _update_object_placement(snap)
     # Snaps the Building, Pattern, Water, Path, etc. polygons to the Snappy Grid.
     _update_selection_box(snap)
+
+    # Snaps a text box to the Snappy Grid.
+    _update_text_box(snap)
 
 
 
@@ -966,6 +1054,15 @@ func _update_portals(snap):
     if Global.Editor.Tools["PortalTool"].Freestanding:
         Global.WorldUI.Texture.Transform.origin = snap
 
+
+
+# Updates the CENTRE position of the text box to the current snap position.
+# This only happens while moving, since we don't want the textbox to flop around with every letterr.
+func _update_text_box(snap):
+    var text_tool = Global.Editor.Tools["TextTool"]
+    var text = text_tool.focus
+    if text_tool.isDragging:
+        text.rect_position = snap - text.rect_size * text.rect_scale / 2
 
 
 
@@ -1565,7 +1662,8 @@ func _create_debug_section():
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
 
-    _draw_vertical_surface_mesh()
+    #print_methods(Script)
+    print_properties(Script)
 
 #    hexagon_radius = fmod(hexagon_radius + 64, 256)
 #    print(hexagon_radius)
@@ -1600,7 +1698,9 @@ func print_properties(node):
     print("========= PRINTING PROPERTIES OF %s ==========" % node.name)
     var properties_list = node.get_property_list()
     for property in properties_list:
-        print(property.name)
+        print(property.name + ": " + type_string(typeof(property)))
+        if property is Object:
+            print_properties(property)
 
 
 ## Debug function, prints methods of the given node
@@ -1609,6 +1709,7 @@ func print_methods(node):
     var method_list = node.get_method_list()
     for method in method_list:
         print(method.name)
+        print(method)
 
 
 ## Debug function, prints signals of the given node
