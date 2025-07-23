@@ -439,20 +439,21 @@ func _create_snap_selection_button():
     snap_selection_button.connect("pressed", self, "_on_snap_select_button")
 
     # We're using the Mirror node as an indicator, as we add the button right after it.
-    var target_text = "Mirror"
-    var above_node = _find_node_by_text(select_panel, target_text, 3)
+    var target_name = "@@1864"
+    var above_node = select_panel.find_node(target_name, true, false)
 
     # Moves the snap selection button below the node we want above it.
     snap_selection_button.get_parent().remove_child(snap_selection_button)
     if above_node:
         above_node.get_parent().add_child_below_node(above_node, snap_selection_button)
     else:
-        print("[%s] Couldn't create Snap Selection button. Missing the '%s' node" % [MOD_DISPLAY_NAME, target_text])
+        print("[%s] Couldn't create Snap Selection button. Missing the '%s' node" % [MOD_DISPLAY_NAME, target_name])
 
 
 # Finds a node by the content of its 'text' property.
 # This is necessary since a lot of vanilla nodes in DD aren't named.
 # Does a recursive depth search through all children and their children, up to the given depth.
+# @DEPRECIATED
 func _find_node_by_text(parent, text, depth = 10):
     if depth == 0:
         return null
@@ -474,12 +475,14 @@ func _find_node_by_text(parent, text, depth = 10):
 func _toggle_tool_enabled(new_state):
     custom_snap_enabled = new_state
     _schedule_save()
+    _update_grid_visuals()
 
 
 ## Sets the flag to disable/enable the grid overlay visuals or return to the vanilla overlay.
 func _toggle_grid_visibility(new_state):
     custom_grid_enabled = new_state
     _schedule_save()
+    _update_grid_visuals()
 
 
 ## Enables to disables the advanced settings section.
@@ -767,7 +770,9 @@ func _schedule_save():
 
 
 func _update_grid_visuals():
-    if not custom_snap_enabled:
+    if not custom_snap_enabled or not custom_grid_enabled:
+        # Hacky way to get DD to redraw its vanilla grid, which we want in this case.
+        Global.Camera.SetRawZoom(Global.Camera.zoom.x)
         return
     _draw_grid_mesh(true)
 
@@ -1263,8 +1268,7 @@ func preset_from_dictionary(data):
 
 # Helper function to call the appropriate function to calculate the mesh based on the active geometry.
 func _draw_grid_mesh(force_draw = false):
-    # Currently we only update if zoom changed
-    # TODO: also upgrade if we changed snap settings.
+    # If we didn't change zoom settings or force a draw, we should already have the same grid mesh.
     if not force_draw and previous_zoom == Global.Camera.zoom:
         return
 
@@ -1731,8 +1735,7 @@ func _create_debug_section():
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
 
-    #print_methods(Script)
-    print_methods(Global.Editor.Tools["SelectTool"])
+    #print_methods(Global.World)
 
 #    hexagon_radius = fmod(hexagon_radius + 64, 256)
 #    print(hexagon_radius)
@@ -1791,6 +1794,7 @@ func print_signals(node):
 
 ## Debug function, prints all other nodes lower in the tree
 func print_children(node):
+    print("========= PRINTING CHILDREN OF %s ==========" % node.name)
     for child in node.get_children():
         print(child.name, " ", child.text)
         print_children(child)
