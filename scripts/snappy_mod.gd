@@ -71,6 +71,8 @@ var save_timer_running = false
 
 # If true, snap to our invisible Snappy Grid, otherwise use default DD behaviour for snapping.
 var custom_snap_enabled = true
+# If true, the custom grid overlay is visible. Otherwise, we show the vanilla DD overlay.
+var custom_grid_enabled = true
 # Whether or not the user can interact with the advanced section.
 var advanced_section_enabled = false
 
@@ -229,10 +231,8 @@ func start():
     # Begin core section
     tool_panel.BeginSection(false)
 
-    # This button will disable custom snapping and return the snapping behaviour to vanilla DD for as long as it is in the off state.
-    var on_off_button = tool_panel.CreateCheckButton("Enabled", "", custom_snap_enabled)
-    on_off_button.connect("toggled", self, "_toggle_tool_enabled")
-    on_off_button.set_tooltip("Disable to return to vanilla snapping mechanics.")
+    # Creates the buttons do enable or disable the tool and the map.
+    _create_tool_enable_buttons()
     
     # Creates the button panel to switch between Sqare, Hex, etc. modes.
     _create_mode_buttons()
@@ -278,6 +278,21 @@ func start():
     _create_snap_selection_button()
 
     print("[%s] UI Layout: successful" % MOD_DISPLAY_NAME)
+
+
+
+
+func _create_tool_enable_buttons():
+    # This button will disable custom snapping and return the snapping behaviour to vanilla DD for as long as it is in the off state.
+    var on_off_button = tool_panel.CreateCheckButton("Enabled", "", custom_snap_enabled)
+    on_off_button.connect("toggled", self, "_toggle_tool_enabled")
+    on_off_button.set_tooltip("Disable to return to vanilla snapping mechanics.")
+
+    # This button will disable custom grid overlay and return the overlay to vanilla DD for as long as it is in the off state.
+    var grid_toggle = tool_panel.CreateCheckButton("Custom Grid", "", custom_grid_enabled)
+    grid_toggle.connect("toggled", self, "_toggle_grid_visibility")
+    grid_toggle.set_tooltip("Disable to use the vanilla grid overlay while still using custom snapping.")
+
 
 
 ## Creates the buttons to switch between the different grid modes, e.g. Square, Hex_V, or Hex_H
@@ -458,6 +473,12 @@ func _find_node_by_text(parent, text, depth = 10):
 ## Sets the flag to disable/enable the tool and return to/from vanilla DD snapping mechanics.
 func _toggle_tool_enabled(new_state):
     custom_snap_enabled = new_state
+    _schedule_save()
+
+
+## Sets the flag to disable/enable the grid overlay visuals or return to the vanilla overlay.
+func _toggle_grid_visibility(new_state):
+    custom_grid_enabled = new_state
     _schedule_save()
 
 
@@ -750,7 +771,7 @@ func _update_grid_visuals():
         return
     _draw_grid_mesh(true)
 
-var debug 
+
 ## Vanilla update called by Dungeondraft every frame.
 func update(delta):
     # Check to see if we need to save our user settings.
@@ -764,7 +785,6 @@ func update(delta):
             save_user_settings()
             save_local_settings()
             
-
     # Updates whether the 'Snap Selection' button is available to press or not.
     # Important to do now, since it has to work even when other snapping is disabled.
     _update_select_button_status()
@@ -773,8 +793,10 @@ func update(delta):
     if not custom_snap_enabled:
         return
         
-    # Updates the displayed grid to match the snap points. We still draw even if we do not snap, so the user still sees the grid.
-    _draw_grid_mesh()
+    # Updates the displayed grid to match the snap points.
+    # We still draw even if we do not snap, so the user still sees the grid.
+    if custom_grid_enabled:
+        _draw_grid_mesh()
 
     # If the user disabled vanilla snapping, we don't want to snap either.
     if not Global.Editor.IsSnapping:
