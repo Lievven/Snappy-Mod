@@ -1,12 +1,6 @@
-		⬢ Fix bug with coordinate display when using polygon tools. [DONE]
-
-		⬢ Change Presets to dict. [DONE]
-
-		⬢ Use ModMapData for per-map saves. [DONE]
-
-⬢ Integrate with _Lib.
-
 ⬢ Create API for other mods to integrate their tools.
+		⬢ Create wiki/readme
+		⬢ Create API [Done]
 
 ⬢ Fractions mode.
 
@@ -14,12 +8,28 @@
 
 ⬢ Preset library in the prefab style.
 
-⬢ Implement custom grid overlay.
+⬢ Mirror Tool
+
+⬢ Snap to Object Tool
+
+
+
+
+
+⬢ Tooltip for Scaling/Offset being Pixels [Done]
+
+⬢ Fix bug with coordinate display when using polygon tools. [DONE]
+
+⬢ Change Presets to dict. [DONE]
+
+⬢ Use ModMapData for per-map saves. [DONE]
+
+⬢ Integrate with _Lib. [Done]
+
+⬢ Snap selected asset to grid. [Done]
+
+⬢ Implement custom grid overlay. [Done]
 		⬢ clamp the grid size to a minimum value. [Done]
 		⬢ HEXAGONS!!! [DONE]
 		⬢ Rename Spacing to Scaling [Done]
 		⬢ Save triangle vs hexagon display [Done]
-⬢ Tooltip for Scaling/Offset being Pixels
-
-⬢ Mirror Tool
-⬢ Snap selected asset to grid

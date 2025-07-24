@@ -1,7 +1,7 @@
 var script_class = "tool"
 
 # Set to true to show debug buttons
-const DEBUG_MODE = true
+const DEBUG_MODE = false
 
 # Tool parameters
 const TOOL_CATEGORY = "Settings"
@@ -277,7 +277,19 @@ func start():
     print("[%s] Adding \"Snap to Grid\" option to Select menu" % MOD_DISPLAY_NAME)
     _create_snap_selection_button()
 
-    print("[%s] UI Layout: successful" % MOD_DISPLAY_NAME)
+
+    # Trying to register with _Lib, so other mods can use custom snapping.
+    print("[%s] Registering with _Lib" % MOD_DISPLAY_NAME)
+    if Engine.has_signal("_lib_register_mod"):
+        Engine.emit_signal("_lib_register_mod", self)
+        Global.API.register(TOOL_ID, self)
+    else:
+        print("[%s] _Lib not found" % MOD_DISPLAY_NAME)
+
+
+    print("[%s] Init successful" % MOD_DISPLAY_NAME)
+
+
 
 
 
@@ -392,6 +404,7 @@ func _create_interval_sliders():
     interval_slider_x.set_allow_greater(true)
     interval_slider_x.set_value(snap_interval.x)
     interval_slider_x.connect("value_changed", self, "_changed_interval_x")
+    interval_slider_x.set_tooltip("The amount of space between snap points in pixels.")
 
     # Creating label and slider to adjust the snap interval in the Y axis.
     tool_panel.CreateLabel("Vertical Scaling")
@@ -399,6 +412,7 @@ func _create_interval_sliders():
     interval_slider_y.set_allow_greater(true)
     interval_slider_y.set_value(snap_interval.y)
     interval_slider_y.connect("value_changed", self, "_changed_interval_y")
+    interval_slider_y.set_tooltip("The amount of space between snap points in pixels.")
     
     # This button locks the horizontal and vertical axis for our selection sliders.
     # After all most of the time the user does not need to have different behaviour for either axis.
@@ -416,6 +430,7 @@ func _create_offset_sliders():
     offset_slider_x.set_allow_lesser(true)
     offset_slider_x.set_value(snap_offset.x)
     offset_slider_x.connect("value_changed", self, "_changed_offset_x")
+    offset_slider_x.set_tooltip("The offset of the grid from the top left corner in pixels.")
 
     # Creating label and slider to adjust the snap offset in the Y axis.
     tool_panel.CreateLabel("Vertical Offset (Down)")
@@ -424,6 +439,7 @@ func _create_offset_sliders():
     offset_slider_y.set_allow_lesser(true)
     offset_slider_y.set_value(snap_offset.y)
     offset_slider_y.connect("value_changed", self, "_changed_offset_y")
+    offset_slider_y.set_tooltip("The offset of the grid from the top left corner in pixels.")
     
     # This button locks the horizontal and vertical axis for our selection sliders.
     # After all most of the time the user does not need to have different behaviour for either axis.
@@ -1734,8 +1750,6 @@ func _create_debug_section():
 ## Debug function, very important. Prints whatever stuff I need to know at the moment.
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
-
-    #print_methods(Global.World)
 
 #    hexagon_radius = fmod(hexagon_radius + 64, 256)
 #    print(hexagon_radius)

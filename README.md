@@ -1,5 +1,7 @@
 # Custom Snap Mod
 For all those who need finer control over where to snap to in Dungeondraft.
+Version 1.1.2 Now comes with Hexagons
+Version 1.2.1 Now comes with a custom Grid Overlay
 
 
 ### Installation.
@@ -14,14 +16,24 @@ If you have a previous version installed, simply delete or replace the old mod f
 ### How to use.
 - You can find the menu to interact with this mod in the Settings category.
 - Switch between vanilla snapping and custom snapping using the 'Enable' button in this menu.
+- If you want to continue using the vanilla grid, disable the 'Custom Grid' button in this menu.
 - You can still turn off snapping altogether with the vanilla keybind ('S' by default).
 - With the mod and snapping enabled, all the tools should properly snap to the given grid.
 - Simply select a snapping resolution from the presets, or enable the advanced mode to set your own custom resolution or even an offset.
 
 
 ### FAQ.
+Q. On the newest beta of Dungeondraft, the mod keeps crashing.
+A. Megasploot is testing shipping mods with the vanilla download and Custom Snap is among them. Unfortunately Dungeondraft doesn't yet handle duplicate mods. Simply head over to your Dungeondraft installation location and delete the duplicate mod files in there.
+
 Q. Can I snap for hexagonal maps? \
 A. Absolutely! Simply check out one of the respective presets, or click one of the hexagonal icons in the mod's tool.
+
+Q. This says it comes with a Hex grid, how come I can only see triangles?
+A. This is the default as the hexagonal grid can cause severe lagg on larger maps. Simply click the 'Hex' button at the bottom of the mod's menu to change to hexes. That said, triangles are really just hexes with a line from each corner to the centre.
+
+Q. I exported the map and it's back to vanilla grid!
+A. Unfortunately I need to write a completely new tool to fix that issue. I'm working on it, I promise!
 
 Q. Does the mod save my settings? \
 A. Yes. You can find the file with the settings by navigating 'Menu' -> 'Open User Folder' and there look for 'custom_snap_mod_data.txt' Note that this file only shows up after you edit your setting for the first time.
@@ -32,8 +44,11 @@ A. Yes. It snaps properly in Freestanding mode but unfortuantely, due to a techn
 Q. The Select tool doesn't snap to where it should. \
 A. It snaps based on distance moved. This is how it works in vanilla, too. You can still snap individual objects normally as the other tools do, by "instant dragging" them without selecting them first.
 
+Q. What should I do if I want to snap multiple selected items at once?
+A. Press the 'Snap Selection' button. Since I do not know which item you want as a basis for the snap, it first snaps the centre of the selection box and on consecutive clicks cycles through all items. Simply click the button until it snaps to the position you wish.
+
 Q. What are the offset sliders doing? \
-A. Using these, you can move all the snap points an equal distance. Useful when you want to place objects slightly off-centred from the grid. Pro tip: you can manually enter a negative value.
+A. Using these, you can move all the snap points an equal distance. Useful when you want to place objects slightly off-centred from the grid. Pro tip: you can manually enter a negative value. Values are in pixels
 
 Q. Offset tool? Where can I find that? \
 A. Enable the advanced section of the tool.
@@ -64,6 +79,27 @@ A. You might have disabled the mod. Or alternatively you might have set the snap
     2. Simply work as intended without benefiting from the Custom Snap Mod.
     3. Have some functionalities snap to the vanilla grid and others to the modded grid.
     4. A random one of the above based on load order.
+- The Custom Snap mod registers to the _Lib API. If your mod of choice supports this aspect of the Custom Snap mod, downloading and enabling the [_Lib mod](https://cartographyassets.com/assets/31828/_lib/) might fix this.
+
+
+### Changelog.
+- Implemented grid overlay (doesn't yet work during export)
+- Fix bug with coordinate display when using polygon tools.
+- You can now snap a whole multi-selection or Prefab to the grid using the Select tool.
+- The Text tool can now also snap while in 'Move' mode.
+- Mod now saves settings individually for each map.
+- 'Spacing' sliders renamed to 'Scaling' as this conveys more accurately that it changes the distance between snap points.
+- Now works with _Lib to allow other mods to use snapping.
+- Wrap contents of .zip into its own folder to prevent loose mod files crashing Dungeondraft.
+- Updated some Tooltips.
+- Updated some icons.
+
+
+### Notes for Modders.
+- If you have your mod registered with the _Lib mod, you can access the Custom Snap mod's functionalities as Global.API.snappy_mod.method_name()
+- When you place items in the World that depend on a snapped position, please call the following methods:
+    1. get_snapped_position(position: Vector2): Vector2 - This will return the absolute position of the closest snap point on the map from the given @position.
+    2. get_snapped_delta(delta: Vector2): Vector2 - When moving items, you may not want to snap to a position but rather have movement happen in discrete bounds. This method will return the snapped delta of a movement from an origin.
 
 
 ### Thanks
