@@ -11,6 +11,7 @@ Version 1.2.1 Now comes with a custom Grid Overlay
 4. Use the mods tab to select the mod and simply open your map.
 
 If you have a previous version installed, simply delete or replace the old mod files.
+On the current beta version of Dungeondraft, you have to head over to your Dungeondraft installation location and delete the duplicate mod files in there to use this mod.
 
 
 ### How to use.

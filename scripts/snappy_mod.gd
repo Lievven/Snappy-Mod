@@ -455,8 +455,9 @@ func _create_snap_selection_button():
     snap_selection_button.connect("pressed", self, "_on_snap_select_button")
 
     # We're using the Mirror node as an indicator, as we add the button right after it.
-    var target_name = "@@1864"
-    var above_node = select_panel.find_node(target_name, true, false)
+    var target_name = "mirror"
+    var icon_path = "res://.import/" + target_name + ".png*"
+    var above_node = _find_node_by_icon_path(select_panel, icon_path, 3)
 
     # Moves the snap selection button below the node we want above it.
     snap_selection_button.get_parent().remove_child(snap_selection_button)
@@ -464,6 +465,26 @@ func _create_snap_selection_button():
         above_node.get_parent().add_child_below_node(above_node, snap_selection_button)
     else:
         print("[%s] Couldn't create Snap Selection button. Missing the '%s' node" % [MOD_DISPLAY_NAME, target_name])
+
+
+## Finds a node by the content of its 'icon' property.
+## We're actually looking for the icon's resource path since we don't know the icon itself.
+## Does a recursive depth search through all children and their children up to given depth.
+func _find_node_by_icon_path(parent, icon_path, depth = 10):
+    if depth == 0:
+        return null
+
+    # Just loop over all the children and match for their 'icon' property's load path.
+    for child in parent.get_children():
+        if "icon" in child and child.icon.load_path.match(icon_path):
+            return child
+
+        # We doing recursion, since many UI items are hidden in containers.
+        var next = _find_node_by_icon_path(child, icon_path, depth - 1)
+        if not next == null:
+            return next
+    
+    return null
 
 
 # Finds a node by the content of its 'text' property.
@@ -1750,6 +1771,10 @@ func _create_debug_section():
 ## Debug function, very important. Prints whatever stuff I need to know at the moment.
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
+    var select_panel = Global.Editor.Toolset.GetToolPanel("SelectTool")
+    var node = select_panel.find_node("@@1864", true, false)
+    print(node.icon.load_path)
+    print_properties(node)
 
 #    hexagon_radius = fmod(hexagon_radius + 64, 256)
 #    print(hexagon_radius)
@@ -1808,7 +1833,6 @@ func print_signals(node):
 
 ## Debug function, prints all other nodes lower in the tree
 func print_children(node):
-    print("========= PRINTING CHILDREN OF %s ==========" % node.name)
     for child in node.get_children():
         print(child.name, " ", child.text)
         print_children(child)
