@@ -46,8 +46,10 @@ var advanced_settings_section
 var enable_advanced_button
 # Contains the buttons for selecting the geometry mode.
 var geometry_mode_container
-# The buttons for changing the hexagon's radial mode between centre to corner and centre to edge.
+# The buttons for changing the hexagon's and isometric's radial mode between centre to corner and centre to edge.
 var radial_mode_container
+# The buttons for changing the hexagon's grid between triangles and hexagons
+var triangle_display_container
 # The option button for the preset menu.
 var preset_menu
 
@@ -325,6 +327,7 @@ func _create_mode_buttons():
     tool_panel.CreateSharedToggle ("", "", active_geometry == GEOMETRY.SQUARE, Global.Root + SQUARE_ICON_PATH, b_group)
     tool_panel.CreateSharedToggle ("", "", active_geometry == GEOMETRY.HEX_H, Global.Root + HORIZONTAL_HEX_ICON_PATH, b_group)
     tool_panel.CreateSharedToggle ("", "", active_geometry == GEOMETRY.HEX_V, Global.Root + VERTICAL_HEX_ICON_PATH, b_group)
+    tool_panel.CreateSharedToggle ("", "", active_geometry == GEOMETRY.ISOMETRIC, Global.Root + ISOMETRIC_ICON_PATH, b_group)
     b_group.connect("pressed", self, "_on_toggle_mode_changed")
 
     # Assigning the proper identifiers to the button.
@@ -333,6 +336,7 @@ func _create_mode_buttons():
     geometry_mode_container.get_child(0).name = GEOMETRY.SQUARE
     geometry_mode_container.get_child(1).name = GEOMETRY.HEX_H
     geometry_mode_container.get_child(2).name = GEOMETRY.HEX_V
+    geometry_mode_container.get_child(3).name = GEOMETRY.ISOMETRIC
 
     # Closing custom section
     # Easily done by replacing 'Align' with the container previously held by it.
@@ -346,7 +350,7 @@ func _create_radial_buttons():
     # Creates a wrapper section, this one is made purely for the purpopse of toggling visibility of the contained elements.
     # If we're in Hex mode, the buttons to be visible, otherwise we want them to be hidden until we need them.
     radial_mode_container = tool_panel.BeginSection(false)
-    radial_mode_container.visible = active_geometry == GEOMETRY.HEX_H or active_geometry == GEOMETRY.HEX_V
+    radial_mode_container.visible = active_geometry == GEOMETRY.HEX_H or active_geometry == GEOMETRY.HEX_V or active_geometry == GEOMETRY.ISOMETRIC
 
     # Here we are creating a custom horizontal section, as those are not yet supported by DD.
     # It's as easy as adding a new container and assigning it as 'Align', which is where DD puts any newly created items.
@@ -365,9 +369,11 @@ func _create_radial_buttons():
     b_group.connect("pressed", self, "_on_radial_mode_changed")
 
     tool_panel.CreateSeparator()
-    mode_container = HBoxContainer.new()
-    section_container.add_child(mode_container)
-    tool_panel.Align = mode_container
+    triangle_display_container = HBoxContainer.new()
+    section_container.add_child(triangle_display_container)
+    tool_panel.Align = triangle_display_container
+    
+    triangle_display_container.visible = active_geometry == GEOMETRY.HEX_H or active_geometry == GEOMETRY.HEX_V
 
     b_group = ButtonGroup.new()
     tool_panel.CreateSharedToggle ("Triangle", "", display_mode_triangles, Global.Root + TRIANGLE_ICON_PATH, b_group)
@@ -544,15 +550,19 @@ func _on_toggle_mode_changed(button):
         GEOMETRY.SQUARE:
             active_geometry = GEOMETRY.SQUARE
             radial_mode_container.visible = false
+            triangle_display_container.visible = false
         GEOMETRY.HEX_H:
             active_geometry = GEOMETRY.HEX_H
             radial_mode_container.visible = true
+            triangle_display_container.visible = true
         GEOMETRY.HEX_V:
             active_geometry = GEOMETRY.HEX_V
             radial_mode_container.visible = true
+            triangle_display_container.visible = true
         GEOMETRY.ISOMETRIC:
             active_geometry = GEOMETRY.ISOMETRIC
-            radial_mode_container.visible = false
+            radial_mode_container.visible = true
+            triangle_display_container.visible = false
     _update_custom_mode()
     _update_grid_visuals()
     _schedule_save()
@@ -1017,9 +1027,9 @@ func snap_square_delta(move_delta):
     return Vector2(snap_x, snap_y)
 
 
-## TODO: IMPLEMENT
+## Isometric delta is equal to the horizontal hex delta.
 func snap_isometric_delta(target_position):
-    pass
+    return snap_horizontal_hex_delta(target_position)
 
 
 ## Snaps the instant drag of the Select Tool to our invisible Snappy Grid.
@@ -1331,12 +1341,21 @@ func _draw_grid_mesh(force_draw = false):
                 return
         GEOMETRY.SQUARE:
             _draw_square_surface_mesh()
+        GEOMETRY.ISOMETRIC:
+            _draw_isometric_surface_mesh()
+
         _:
             print("[%s] Drawing grid mesh: wrong active geometry" % MOD_DISPLAY_NAME)
             return
     
     # Actually add the calculated grid to the mesh.
     _add_surface_array_to_mesh()
+
+
+
+func _draw_isometric_surface_mesh():
+    # Isometric grid is actually the same as horizontal triangles, just with a few less lines.
+    _draw_horizontal_triangle_surface_mesh(true)
 
 
 # Helper function to provide ratios for hexagon radius distances
@@ -1405,7 +1424,7 @@ func _draw_vertical_triangle_surface_mesh():
 # Calculates the vertices and UVs for a hexagonal grid displayed as triangles in horizontal (point up) orientation.
 # Rendering and calculation is fast since the amount of straight lines is in O(n)
 # As a rule of thumb, any lines drawn always originate from the HIGHER end of the line.
-func _draw_horizontal_triangle_surface_mesh():
+func _draw_horizontal_triangle_surface_mesh(isometric = false):
     # Map size needed to calculate mesh from 0 to the end of the map.
     var map_size = Global.World.WoxelDimensions
 
@@ -1417,13 +1436,15 @@ func _draw_horizontal_triangle_surface_mesh():
         size_factor *= 2
     
     # Calculating mesh surfaces for vertical lines. Simply loop till we're off the map.
+    # If we're in isometric view, these are unwanted, so we don't draw them then.
     var line_x = fposmod(snap_offset.x, snap_interval.x * _get_triangle_ratio().x * size_factor / 2)
-    while line_x <= map_size.x:
-        var vertical_a = Vector2(line_x, 0)
-        var vertical_b = Vector2(line_x, map_size.y)
-        _add_grid_mesh_triangles(vertical_a, vertical_b)
-        # Since we're doing triangle meshes, we do half resolution to not clutter the map.
-        line_x += snap_interval.x * _get_triangle_ratio().x * size_factor / 2
+    if not isometric:
+        while line_x <= map_size.x:
+            var vertical_a = Vector2(line_x, 0)
+            var vertical_b = Vector2(line_x, map_size.y)
+            _add_grid_mesh_triangles(vertical_a, vertical_b)
+            # Since we're doing triangle meshes, we do half resolution to not clutter the map.
+            line_x += snap_interval.x * _get_triangle_ratio().x * size_factor / 2
     
     # Distance between triangles along the respective borders.
     var vertical_multiplier = get_hexagon_size().x / get_hexagon_size().y
