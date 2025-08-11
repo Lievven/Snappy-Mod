@@ -66,6 +66,7 @@ var select_tool
 var snap_selection_button
 # The last transformation made by the snap select tool button.
 var previous_transform = Vector2(0, 0)
+var initial_tranforms
 
 # A timer to put a slight delay between changing the sliders and saving so we don't save a million times.
 var save_timer = SAVE_DELAY
@@ -656,10 +657,11 @@ func _on_snap_select_button():
 # Returns @true if selected items changed and @false if not.
 func _populate_initial_transforms():
     # If the selectables haven't changed, the corresponding intial transforms are still up to date.
-    if raw_selectables == select_tool.RawSelectables:
+    if raw_selectables == select_tool.RawSelectables \
+    and initial_tranforms.values() == select_tool.initialRelativeTransforms.values():
         return false
 
-    var initial_tranforms = {}
+    initial_tranforms = {}
     raw_selectables = select_tool.RawSelectables
     for selectable in raw_selectables:
         initial_tranforms[selectable] = selectable.Thing.transform

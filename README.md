@@ -84,8 +84,11 @@ A. You might have disabled the mod. Or alternatively you might have set the snap
 
 
 ### Changelog.
+- Version 1.2.3
+    - The Snap Select button now properly snaps to the vanilla grid if Custom Snap is disabled.
+    - Fixed bug where Snap Select button would vanish selection if it was moved between two instances of pressing the button.
 - Version 1.2.2
-    - Now comes with dedicated isometric view
+    - Now comes with dedicated isometric view.
 - Version 1.2.1
     - Implemented grid overlay (doesn't yet work during export)
     - Fix bug with coordinate display when using polygon tools.
