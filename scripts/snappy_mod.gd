@@ -895,7 +895,12 @@ func update(delta):
 
 ## Calculate the closest position snapped to our invisible Snappy Grid from the given Vector2.
 ## This one simply snaps the delta from the offset, then reapplies the offset.
+# If Custom Snap is disabled, will instead give the vanilla snapped position.
 func get_snapped_position(target_position):
+    # If the tool isn't active, we just return vanilla DD's default position.
+    # This is useful in case any other mods or features use this function.
+    if not custom_snap_enabled:
+        return Global.WorldUI.GetSnappedPosition(target_position)
     var offset_position = target_position - snap_offset
     return get_snapped_delta(offset_position) + snap_offset
 

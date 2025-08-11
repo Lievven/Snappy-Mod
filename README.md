@@ -84,16 +84,19 @@ A. You might have disabled the mod. Or alternatively you might have set the snap
 
 
 ### Changelog.
-- Implemented grid overlay (doesn't yet work during export)
-- Fix bug with coordinate display when using polygon tools.
-- You can now snap a whole multi-selection or Prefab to the grid using the Select tool.
-- The Text tool can now also snap while in 'Move' mode.
-- Mod now saves settings individually for each map.
-- 'Spacing' sliders renamed to 'Scaling' as this conveys more accurately that it changes the distance between snap points.
-- Now works with _Lib to allow other mods to use snapping.
-- Wrap contents of .zip into its own folder to prevent loose mod files crashing Dungeondraft.
-- Updated some Tooltips.
-- Updated some icons.
+- Version 1.2.2
+    - Now comes with dedicated isometric view
+- Version 1.2.1
+    - Implemented grid overlay (doesn't yet work during export)
+    - Fix bug with coordinate display when using polygon tools.
+    - You can now snap a whole multi-selection or Prefab to the grid using the Select tool.
+    - The Text tool can now also snap while in 'Move' mode.
+    - Mod now saves settings individually for each map.
+    - 'Spacing' sliders renamed to 'Scaling' as this conveys more accurately that it changes the distance between snap points.
+    - Now works with _Lib to allow other mods to use snapping.
+    - Wrap contents of .zip into its own folder to prevent loose mod files crashing Dungeondraft.
+    - Updated some Tooltips.
+    - Updated some icons.
 
 
 ### Notes for Modders.
