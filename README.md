@@ -84,6 +84,10 @@ A. You might have disabled the mod. Or alternatively you might have set the snap
 
 
 ### Changelog.
+- Version 1.2.5
+    - Updated presets to actually be correct for Roll20 hex grids.
+- Version 1.2.4
+    - Fixed issue with the Snap Select button not appearing in other Dungeondraft versions.
 - Version 1.2.3
     - The Snap Select button now properly snaps to the vanilla grid if Custom Snap is disabled.
     - Fixed bug where Snap Select button would vanish selection if it was moved between two instances of pressing the button.
