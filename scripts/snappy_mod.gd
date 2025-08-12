@@ -279,7 +279,11 @@ func start():
 
     print("[%s] Adding \"Snap to Grid\" option to Select menu" % MOD_DISPLAY_NAME)
     _create_snap_selection_button()
-
+    
+    # Connects grid draw to export functionality.
+    print("[%s] Connecting Exporter" % MOD_DISPLAY_NAME)
+    var export_button = Global.Editor.Windows["Export"].exportButton
+    export_button.connect("pressed", self, "_draw_grid_mesh")
 
     # Trying to register with _Lib, so other mods can use custom snapping.
     print("[%s] Registering with _Lib" % MOD_DISPLAY_NAME)
@@ -847,8 +851,7 @@ func update(delta):
         
     # Updates the displayed grid to match the snap points.
     # We still draw even if we do not snap, so the user still sees the grid.
-    if custom_grid_enabled:
-        _draw_grid_mesh()
+    _draw_grid_mesh()
 
     # If the user disabled vanilla snapping, we don't want to snap either.
     if not Global.Editor.IsSnapping:
@@ -1320,6 +1323,10 @@ func preset_from_dictionary(data):
 
 # Helper function to call the appropriate function to calculate the mesh based on the active geometry.
 func _draw_grid_mesh(force_draw = false):
+    # We don't want to draw the grid if it's disabled, even if we would otherwise force a draw.
+    if not custom_grid_enabled:
+        return
+
     # If we didn't change zoom settings or force a draw, we should already have the same grid mesh.
     if not force_draw and previous_zoom == Global.Camera.zoom:
         return
@@ -1797,8 +1804,10 @@ func _create_debug_section():
 ## Debug function, very important. Prints whatever stuff I need to know at the moment.
 func _on_debug_button():
     print("========== DEBUG BUTTON ==========")
-    var select_panel = Global.Editor.Toolset.GetToolPanel("SelectTool")
-    print_properties(select_panel)
+
+
+
+
 #    hexagon_radius = fmod(hexagon_radius + 64, 256)
 #    print(hexagon_radius)
 #    print_children(tool_panel)
