@@ -89,6 +89,8 @@ var active_geometry = GEOMETRY.HEX_H
 var radial_mode_to_corner = true
 # If true, the display grid will use triangles. Otherwise hexagons will be used.
 var display_mode_triangles = true
+# If true, isometric snapping will use game projection of 1:2 ration rather than a hexagonal based one.
+var isometric_mode_game = false
 
 # If true, the offset and interval sliders' x and y sliders become linked and changing x changes y to the same value and the other way around.
 var lock_aspect_offset = true
@@ -98,6 +100,11 @@ var lock_aspect_interval = true
 var snap_offset = Vector2(0, 0)
 # The space inbetween the invisible lines we snap to.
 var snap_interval = Vector2(32, 32)
+
+# Multiply the distance between grid overlay lines and snap points by this amount.
+# Usually mesh size should be 2x the snap interval for less clutter.
+var snap_interval_multiplier = 1.0
+var mesh_size_multiplier = snap_interval_multiplier * 2.0
 
 # The origin of any snap boxes. If null, there currently is no active snap box.
 var box_origin = null
@@ -930,7 +937,7 @@ func get_snapped_delta(delta):
 func snap_vertical_hex_delta(target_delta):
     # We scale our position by the size vector so we can work with normalised sizes.
     # The scale is a vector so we can stretch hexes horizontally or vertically if we want to.
-    var size = get_hexagon_size()
+    var size = get_hexagon_size() * snap_interval_multiplier
     target_delta /= size
 
     # First, we need to convert our world coordinates into hexagon coordinates.
@@ -955,10 +962,11 @@ func snap_vertical_hex_delta(target_delta):
 ## The vertices of horizontal hexes just happen to be the centres of half as big, 90° rotated hexes.
 ## The algorithm was nabbed from here: https://www.redblobgames.com/grids/hexagons/#pixel-to-hex
 ## It's a very interesting read and an essential for game devs, so check it out.
-func snap_horizontal_hex_delta(target_delta):
+## @size_multiplier optionally snaps to a larger or smaller resolution.
+func snap_horizontal_hex_delta(target_delta, size_multiplier = 1.0):
     # We scale our position by the size vector so we can work with normalised sizes.
     # The scale is a vector so we can stretch hexes horizontally or vertically if we want to.
-    var size = get_hexagon_size()
+    var size = get_hexagon_size() * snap_interval_multiplier * size_multiplier
     target_delta /= size
     
     # First, we need to convert our world coordinates into hexagon coordinates.
@@ -1021,23 +1029,52 @@ func round_hex_coordinates(fractional_hex):
 ## Snap the delta of a given delta based on our square snap interval.
 ## Returns a new delta, which is the old delta snapped to the closest multiple of our snap interval.
 func snap_square_delta(move_delta):
+    # The multiplied snap values to potentially snap at double resolution compared to the grid overlay.
+    var dist_x = snap_interval.x * snap_interval_multiplier
+    var dist_y = snap_interval.y * snap_interval_multiplier
+
     # Snap the movement to the next interval smaller than the actual movement.
-    var snap_x = floor(move_delta.x / snap_interval.x) * snap_interval.x
-    var snap_y = floor(move_delta.y / snap_interval.y) * snap_interval.y
+    var snap_x = floor(move_delta.x / dist_x) * dist_x
+    var snap_y = floor(move_delta.y / dist_y) * dist_y
 
     # If we're closer to the next interval larger than the actual movement, we snap there instead.
-    if fmod(move_delta.x, snap_interval.x) > snap_interval.x / 2:
-        snap_x += snap_interval.x
-    if fmod(move_delta.y, snap_interval.y) > snap_interval.y / 2:
-        snap_y += snap_interval.y
+    if fmod(move_delta.x, dist_x) > dist_x / 2:
+        snap_x += dist_x
+    if fmod(move_delta.y, dist_y) > dist_y / 2:
+        snap_y += dist_y
 
     # Returning the new delta. Not a position.
     return Vector2(snap_x, snap_y)
 
 
 ## Isometric delta is equal to the horizontal hex delta.
-func snap_isometric_delta(target_position):
-    return snap_horizontal_hex_delta(target_position)
+## Or in game view, we use similar math, but use much simpler 2:1 ratios.
+func snap_isometric_delta(target_delta):
+    if not isometric_mode_game:
+        return snap_horizontal_hex_delta(target_delta, 0.5 * snap_interval_multiplier)
+    
+    # We scale our position by the size vector so we can work with normalised sizes.
+    # The scale is a vector so we can stretch hexes horizontally or vertically if we want to.
+    var size = snap_interval * Vector2(0.5, 0.5) * snap_interval_multiplier
+    target_delta /= size
+    
+    # First, we need to convert our world coordinates into hexagon coordinates.
+    # Since the coordinates are already normalised, we don't need to divide by the scale anymore
+    # Additionally, since we use game isometric with a 2:1 ratio, the math is a bit easier.
+    var q = target_delta.x
+    var r = -0.5 * target_delta.x + target_delta.y
+
+    # We can then round the hexagon coordinates to snap our cursor into the closest hexagon.
+    var hex = round_hex_coordinates(Vector2(q, r))
+
+    # Having snapped our cursor into position, we can then once again convert the hexagon coordinates into world coordinates.
+    # Since the coordinates are already normalised, we don't need to multiply by the scale anymore
+    var x = hex.x
+    var y = 0.5 * hex.x + hex.y
+
+    # Don't forget to scale our vector back up to world size.
+    return Vector2(x, y) * size
+
 
 
 ## Snaps the instant drag of the Select Tool to our invisible Snappy Grid.
@@ -1367,7 +1404,49 @@ func _draw_grid_mesh(force_draw = false):
 
 func _draw_isometric_surface_mesh():
     # Isometric grid is actually the same as horizontal triangles, just with a few less lines.
-    _draw_horizontal_triangle_surface_mesh(true)
+    if not isometric_mode_game:
+        _draw_horizontal_triangle_surface_mesh(true)
+        return
+    
+    # Map size needed to calculate mesh from 0 to the end of the map.
+    var map_size = Global.World.WoxelDimensions
+
+    # Makes sure that if you go too low in detail, the grid doesn't paint the screen black.
+    # Simply upscales the visuals (the snap points stay the same)
+    # Not a clean solution but this shouldn't be used anyway.
+    var size_factor = mesh_size_multiplier / 2.0
+    while min(snap_interval.x, snap_interval.y) * size_factor < 32:
+        size_factor *= 2
+    
+    # Distance between triangles along the respective borders.
+    var vertical_multiplier = snap_interval.x / snap_interval.y * 2.0
+    var north_increment = snap_interval.x * 2.0 * size_factor
+    var east_increment = snap_interval.y * size_factor
+    var south_east = Vector2(vertical_multiplier, 1)
+    var south_west = Vector2(-vertical_multiplier, 1)
+
+    # Calculating mesh surfaces from the north border going south-east.
+    var line_x = snap_offset.x - snap_offset.y * vertical_multiplier
+    line_x = fposmod(line_x, north_increment)
+    _draw_north_triangle_lines(line_x, south_east, north_increment)
+    
+    # Calculating mesh surfaces from the east border going south-east.
+    var line_y = snap_offset.y - snap_offset.x / vertical_multiplier
+    line_y = fposmod(line_y, east_increment)
+    var base_vector = Vector2(0, line_y)
+    _draw_east_triangle_lines(base_vector, south_east, east_increment)
+    
+    # Calculating mesh surfaces from the north border going south-west.
+    line_x = snap_offset.x + snap_offset.y * vertical_multiplier
+    line_x = fposmod(line_x, north_increment)
+    # x_offset required to continue the lines along the east wall in the same direction
+    var x_offset = _draw_north_triangle_lines(line_x, south_west, north_increment)
+    
+    # Calculating mesh surfaces from the east border going south-east.
+    x_offset -= map_size.x
+    line_y = x_offset / vertical_multiplier   # y_offset and fposmod is already indirectly included via x_offset
+    base_vector = Vector2(map_size.x, line_y)
+    _draw_east_triangle_lines(base_vector, south_west, east_increment)
 
 
 # Helper function to provide ratios for hexagon radius distances
@@ -1388,10 +1467,10 @@ func _draw_vertical_triangle_surface_mesh():
     # Makes sure that if you go too low in detail, the grid doesn't paint the screen black.
     # Simply upscales the visuals (the snap points stay the same)
     # Not a clean solution but this shouldn't be used anyway.
-    var size_factor = 1
+    var size_factor = mesh_size_multiplier / 2.0
     while min(snap_interval.x, snap_interval.y) * size_factor < 32:
         size_factor *= 2
-
+    
     # Calculating mesh surfaces for horizontal lines. Simply loop till we're off the map.
     var line_y = fposmod(snap_offset.y, snap_interval.y * _get_triangle_ratio().x * size_factor / 2)
     while line_y <= map_size.y:
@@ -1443,7 +1522,7 @@ func _draw_horizontal_triangle_surface_mesh(isometric = false):
     # Makes sure that if you go too low in detail, the grid doesn't paint the screen black.
     # Simply upscales the visuals (the snap points stay the same)
     # Not a clean solution but this shouldn't be used anyway.
-    var size_factor = 1
+    var size_factor = mesh_size_multiplier / 2.0
     while min(snap_interval.x, snap_interval.y) * size_factor < 32:
         size_factor *= 2
     
@@ -1536,21 +1615,25 @@ func _draw_square_surface_mesh():
     # Map size needed to calculate mesh from 0 to the end of the map.
     var map_size = Global.World.WoxelDimensions
 
+    # Reduce mesh resolution for less clutter from grid lines.
+    var dist_x = snap_interval.x * mesh_size_multiplier
+    var dist_y = snap_interval.y * mesh_size_multiplier
+
     # Calculating mesh surfaces for vertical lines. Simply loop till we're off the map.
-    var line_x = fposmod(snap_offset.x, snap_interval.x)
+    var line_x = fposmod(snap_offset.x, dist_x)
     while line_x <= map_size.x:
         var vertical_a = Vector2(line_x, 0)
         var vertical_b = Vector2(line_x, map_size.y)
         _add_grid_mesh_triangles(vertical_a, vertical_b)
-        line_x += snap_interval.x
+        line_x += dist_x
 
     # Calculating mesh surfaces for horizontal lines. Simply loop till we're off the map.
-    var line_y = fposmod(snap_offset.y, snap_interval.y)
+    var line_y = fposmod(snap_offset.y, dist_y)
     while line_y <= map_size.y:
         var horizontal_a = Vector2(0, line_y)
         var horizontal_b = Vector2(map_size.x, line_y)
         _add_grid_mesh_triangles(horizontal_a, horizontal_b)
-        line_y += snap_interval.y
+        line_y += dist_y
 
 
 # Calculates the vertices and UVs for a hexagonal grid in vertical orientation.
@@ -1562,7 +1645,8 @@ func _draw_vertical_surface_mesh():
     
     # We make sure the snap interval can't be less than 64
     # Anything smaller than that is just gonna cause horrible performance.
-    var clamped_interval = snap_interval
+    # Multiplying by mesh size also lets us control the size relative to the snap point interval.
+    var clamped_interval = snap_interval * mesh_size_multiplier / 2.0
     var size = get_hexagon_size()
     while min(clamped_interval.x, clamped_interval.y) < 64:
         clamped_interval *= 2
@@ -1638,7 +1722,8 @@ func _draw_horizontal_surface_mesh():
 
     # We make sure the snap interval can't be less than 64
     # Anything smaller than that is just gonna cause horrible performance.
-    var clamped_interval = snap_interval
+    # Multiplying by mesh size also lets us control the size relative to the snap point interval.
+    var clamped_interval = snap_interval * mesh_size_multiplier / 2.0
     var size = get_hexagon_size()
     while min(clamped_interval.x, clamped_interval.y) < 64:
         clamped_interval *= 2
