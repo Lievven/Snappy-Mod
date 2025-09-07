@@ -12,6 +12,8 @@
 
 ⬢ Snap to Object Tool
 
+⬢ Vanilla + Custom Snap grid available at the same time in different colours.
+
 
 
 

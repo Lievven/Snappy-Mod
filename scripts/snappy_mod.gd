@@ -75,7 +75,7 @@ var save_timer_running = false
 # If true, snap to our invisible Snappy Grid, otherwise use default DD behaviour for snapping.
 var custom_snap_enabled = true
 # If true, the custom grid overlay is visible. Otherwise, we show the vanilla DD overlay.
-var custom_grid_enabled = true
+var custom_grid_enabled = false
 # Whether or not the user can interact with the advanced section.
 var advanced_section_enabled = false
 

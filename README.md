@@ -84,6 +84,8 @@ A. You might have disabled the mod. Or alternatively you might have set the snap
 
 
 ### Changelog.
+- Version 1.X.X
+    - Mod now starts with Custom Grid visuals disabled when newly installed.
 - Version 1.2.5
     - Updated presets to actually be correct for Roll20 hex grids.
 - Version 1.2.4
