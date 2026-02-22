@@ -75,7 +75,7 @@ var save_timer_running = false
 # If true, snap to our invisible Snappy Grid, otherwise use default DD behaviour for snapping.
 var custom_snap_enabled = true
 # If true, the custom grid overlay is visible. Otherwise, we show the vanilla DD overlay.
-var custom_grid_enabled = false
+var custom_grid_enabled = true
 # Whether or not the user can interact with the advanced section.
 var advanced_section_enabled = false
 
@@ -292,18 +292,21 @@ func start():
     var export_button = Global.Editor.Windows["Export"].exportButton
     export_button.connect("pressed", self, "_draw_grid_mesh")
 
-    # Trying to register with _Lib, so other mods can use custom snapping.
-    print("[%s] Registering with _Lib" % MOD_DISPLAY_NAME)
-    if Engine.has_signal("_lib_register_mod"):
-        Engine.emit_signal("_lib_register_mod", self)
-        Global.API.register(TOOL_ID, self)
-    else:
-        print("[%s] _Lib not found" % MOD_DISPLAY_NAME)
-
+    _register_APIs()
 
     print("[%s] Init successful" % MOD_DISPLAY_NAME)
 
 
+
+func _register_APIs():
+    # Trying to register with _Lib, so other mods can use custom snapping.
+    print("[%s] Registering with _Lib" % MOD_DISPLAY_NAME)
+    if not Engine.has_signal("_lib_register_mod"):
+        print("[%s] _Lib not found" % MOD_DISPLAY_NAME)
+        return
+    
+    Engine.emit_signal("_lib_register_mod", self)
+    Global.API.register(TOOL_ID, self)
 
 
 
@@ -911,8 +914,53 @@ func get_snapped_position(target_position):
     # This is useful in case any other mods or features use this function.
     if not custom_snap_enabled:
         return Global.WorldUI.GetSnappedPosition(target_position)
+
     var offset_position = target_position - snap_offset
-    return get_snapped_delta(offset_position) + snap_offset
+
+    var snapped_position = get_snapped_delta(offset_position) + snap_offset
+
+    # If we have access to the GuideLines API, we can try to find a snap point from said guidelines.
+    if not Global.API or not Global.API.GuidesLinesApi:
+        return snapped_position
+
+    var guide_snapped_position = get_guide_snapped_position(target_position, snapped_position)
+    if not guide_snapped_position:
+        return snapped_position
+    return guide_snapped_position
+
+
+#TODO: IMPLEMENT SEPARATE, CURRENTLY UNREACHABLE PARTS
+func get_guide_snapped_position(target_position, snapped_position):
+    var radius = target_position.distance_to(snapped_position)
+    var return_point = null
+
+    var line_a = Vector2(0, 0)
+    var line_b = Vector2(32, 32)
+    var marker = Global.API.GuidesLinesApi.find_line_intersection(line_a, line_b, target_position, radius)
+    if marker:
+        if target_position.distance_to(marker["point"]) < radius:
+            return_point = marker["point"]
+            radius = target_position.distance_to(marker["point"])
+
+
+    marker = Global.API.GuidesLinesApi.find_nearest_marker_by_geometry(target_position, radius)
+    if marker:
+        if marker["vertex"]:
+            if target_position.distance_to(marker["vertex"]) < radius:
+                return_point = marker["vertex"]
+                radius = target_position.distance_to(marker["vertex"])
+        elif target_position.distance_to(marker["point"]) < radius:
+            return_point = marker["point"]
+            radius = target_position.distance_to(marker["point"])
+
+
+    marker = Global.API.GuidesLinesApi.find_nearest_geometry_point(target_position, radius)
+    if marker:
+        if target_position.distance_to(marker["point"]) < radius:
+            return_point = marker["point"]
+            radius = target_position.distance_to(marker["point"])
+    
+    return return_point
 
 
 ## Snap the delta of a given movement or position based on our snap interval.

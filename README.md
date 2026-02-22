@@ -33,8 +33,8 @@ A. Absolutely! Simply check out one of the respective presets, or click one of t
 Q. This says it comes with a Hex grid, how come I can only see triangles?
 A. This is the default as the hexagonal grid can cause severe lagg on larger maps. Simply click the 'Hex' button at the bottom of the mod's menu to change to hexes. That said, triangles are really just hexes with a line from each corner to the centre.
 
-Q. I exported the map and it's back to vanilla grid!
-A. Unfortunately I need to write a completely new tool to fix that issue. I'm working on it, I promise!
+Q. I exported the map and it’s back to vanilla grid! \
+A. Exporting doesn't work in old versions. Please update to 1.2.7 or later versions.
 
 Q. Does the mod save my settings? \
 A. Yes. You can find the file with the settings by navigating 'Menu' -> 'Open User Folder' and there look for 'custom_snap_mod_data.txt' Note that this file only shows up after you edit your setting for the first time.
@@ -84,8 +84,10 @@ A. You might have disabled the mod. Or alternatively you might have set the snap
 
 
 ### Changelog.
-- Version 1.X.X
-    - Mod now starts with Custom Grid visuals disabled when newly installed.
+- Version 1.2.7
+    - Custom Grid now works on exports.
+- Version 1.2.6 (Experimental)
+    - Grid visuals disabled on first map. Change dropped starting from 1.2.7 again.
 - Version 1.2.5
     - Updated presets to actually be correct for Roll20 hex grids.
 - Version 1.2.4

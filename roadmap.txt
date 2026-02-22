@@ -4,6 +4,8 @@
 
 ⬢ Fractions mode.
 
+⬢ Change Grid Layer
+
 ⬢ Allow to save custom presets.
 
 ⬢ Preset library in the prefab style.
